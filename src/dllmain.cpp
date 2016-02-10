@@ -107,6 +107,51 @@ file_crc32 (const wchar_t* wszFilename)
   return filecrc32;
 }
 
+bool
+CheckTouchServices (void)
+{
+  bool running = false;
+
+  SC_HANDLE svc_ctl =
+    OpenSCManagerW ( nullptr,
+                       nullptr,
+                         SC_MANAGER_ALL_ACCESS );
+
+  if (svc_ctl) {
+    SC_HANDLE tablet_svc =
+      OpenServiceW ( svc_ctl,
+                       L"TabletInputService",
+                         SERVICE_STOP         |
+                         SERVICE_QUERY_STATUS |
+                         SERVICE_CHANGE_CONFIG );
+
+    if (tablet_svc) {
+      SERVICE_STATUS status;
+      QueryServiceStatus (tablet_svc, &status);
+
+      if (status.dwCurrentState != SERVICE_STOPPED) {
+        running = true;
+
+        ControlService (tablet_svc, SERVICE_CONTROL_STOP, &status);
+
+        ChangeServiceConfig ( tablet_svc,
+                                SERVICE_NO_CHANGE,
+                                  /*SERVICE_AUTO_START :*/SERVICE_DISABLED,
+                                SERVICE_NO_CHANGE,
+                                  nullptr, nullptr,
+                                    nullptr, nullptr,
+                                      nullptr, nullptr, nullptr );
+      }
+
+      CloseServiceHandle (tablet_svc);
+    }
+
+    CloseServiceHandle (svc_ctl);
+  }
+
+  return running;
+}
+
 
 #pragma comment (lib, "advapi32.lib")
 #pragma comment (lib, "user32.lib")
@@ -353,7 +398,30 @@ WinMain ( _In_ HINSTANCE hInstance,
     return 0;
   }
 
-  ShellExecuteW (NULL, L"open", L"TOS.exe", nullptr, nullptr, SW_SHOWNORMAL);
+  if (CheckTouchServices () && GetFileAttributesW (L"touch_warning") == INVALID_FILE_ATTRIBUTES) {
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof(config);
+    config.dwCommonButtons    = TDCBF_OK_BUTTON;
+    config.pszMainIcon        = TD_WARNING_ICON;
+    config.pszMainInstruction = L"TSFix Must Disable TabletInputService";
+    config.pszContent         = L"Touch Input Services are running and will cause the game to crash periodically,"
+                                L" TSFix is going to disable the service while Tales of Symphonia is running.\n\n"
+                                L" >> The services will be restored at game exit <<";
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+
+    TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
+
+    CreateFileW   ( L"touch_warning", GENERIC_WRITE, 0,
+                      nullptr, CREATE_NEW,
+                        FILE_ATTRIBUTE_HIDDEN |
+                        FILE_ATTRIBUTE_READONLY,
+                          nullptr );
+  } else {
+    ShellExecuteW (NULL, L"open", L"TOS.exe", nullptr, nullptr, SW_SHOWNORMAL);
+  }
 
   FreeLibrary (hModComCtl32);
   FreeLibrary (hModShell32);
