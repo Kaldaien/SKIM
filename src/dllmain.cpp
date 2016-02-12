@@ -132,6 +132,8 @@ CheckTouchServices (void)
       if (status.dwCurrentState != SERVICE_STOPPED) {
         running = true;
 
+// TSFix can do this by itself
+#if 0
         ControlService (tablet_svc, SERVICE_CONTROL_STOP, &status);
 
         ChangeServiceConfig ( tablet_svc,
@@ -141,6 +143,7 @@ CheckTouchServices (void)
                                   nullptr, nullptr,
                                     nullptr, nullptr,
                                       nullptr, nullptr, nullptr );
+#endif
       }
 
       CloseServiceHandle (tablet_svc);
@@ -151,6 +154,67 @@ CheckTouchServices (void)
 
   return running;
 }
+
+class iImportLibrary
+{
+public:
+               iImportLibrary (const wchar_t* wszName) { }
+
+  virtual bool isLoaded (void) = 0;
+
+protected:
+  //std::wstring name_;
+private:
+};
+
+class DLLImport : public iImportLibrary
+{
+public:
+  DLLImport (const wchar_t* wszName) : iImportLibrary (wszName)
+  {
+    module_ = nullptr;
+
+    module_ = GetModuleHandle (wszName);
+
+    if (module_ != nullptr)
+      refs_++;
+
+    else
+      module_ = LoadLibrary (wszName);
+
+    if (module_ != nullptr)
+      refs_++;
+  }
+
+  ~DLLImport (void) {
+    if (isLoaded ()) {
+      refs_--;
+      FreeLibrary (module_);
+
+      module_ = nullptr;
+
+      //assert refs_ == 0
+    }
+  }
+
+  bool   isLoaded (void) { return module_ != nullptr; }
+
+  LPVOID getProcAddress (const char* szProcName) {
+    return GetProcAddress (module_, szProcName);
+  }
+
+protected:
+  HMODULE module_;
+
+private:
+  uint32_t refs_;
+};
+
+typedef BOOL (__stdcall *BMF_NvAPI_IsInit_pfn)(void);
+typedef void (__stdcall *BMF_NvAPI_SetAppName_pfn)(const wchar_t* wszAppName);
+typedef void (__stdcall *BMF_NvAPI_SetAppFriendlyName_pfn)(const wchar_t* wszAppFriendlyName);
+typedef void (__stdcall *BMF_NvAPI_SetLauncher_pfn)(const wchar_t* wszLauncherName);
+typedef BOOL (__stdcall *BMF_NvAPI_AddLauncherToProf_pfn)(void);
 
 
 #pragma comment (lib, "advapi32.lib")
@@ -262,19 +326,34 @@ WinMain ( _In_ HINSTANCE hInstance,
           _In_ LPSTR     lpCmdLine,
           _In_ int       nCmdShow )
 {
-  HMODULE hModShell32  = LoadLibrary (L"Shell32.dll");
-  HMODULE hModComCtl32 = LoadLibrary (L"Comctl32.dll");
+#if 0
+  DLLImport D3D9 ("d3d9.dll");
+
+  BMF_NvAPI_IsInit_pfn BMF_NvAPI_IsInit =
+    (BMF_NvAPI_IsInit_pfn)D3D9.getProcAddress ("BMF_NvAPI_IsInit");
+  BMF_NvAPI_SetAppName_pfn BMF_NvAPI_SetAppName =
+    (BMF_NvAPI_SetAppName_pfn)D3D9.getProcAddress ("BMF_NvAPI_SetAppName");
+  BMF_NvAPI_SetAppFriendlyName_pfn BMF_NvAPI_SetAppFriendlyName =
+    (BMF_NvAPI_SetAppFriendlyName_pfn)D3D9.getProcAddress ("BMF_NvAPI_SetAppFriendlyName");
+  BMF_NvAPI_SetLauncher_pfn BMF_NvAPI_SetLauncher =
+    (BMF_NvAPI_SetLauncher_pfn)D3D9.getProcAddress ("BMF_NvAPI_SetLauncher");
+  BMF_NvAPI_AddLauncherToProf_pfn BMF_NvAPI_AddLauncherToProf =
+    (BMF_NvAPI_AddLauncherToProf_pfn)D3D9.getProcAddress ("BMF_NvAPI_AddLauncherToProf");
+#endif
+
+  DLLImport Shell32  (L"Shell32.dll");
+  DLLImport Comctl32 (L"Comctl32.dll");
 
   TaskDialogIndirect =
     (TaskDialogIndirect_pfn)
-      GetProcAddress (hModComCtl32, "TaskDialogIndirect");
+    Comctl32.getProcAddress ("TaskDialogIndirect");
   TaskDialog         =
     (TaskDialog_pfn)
-      GetProcAddress (hModComCtl32, "TaskDialog");
+      Comctl32.getProcAddress ("TaskDialog");
 
   ShellExecuteW =
     (ShellExecuteW_pfn)
-      GetProcAddress (hModShell32, "ShellExecuteW");
+      Shell32.getProcAddress ("ShellExecuteW");
 
   DWORD dwDisposition = 0x00;
   HKEY  key           = nullptr;
@@ -322,6 +401,7 @@ WinMain ( _In_ HINSTANCE hInstance,
 
         if (installed || updated) {
           int               nButtonPressed = 0;
+    const TASKDIALOG_BUTTON buttons []     = { { IDCONTINUE, L"See Release Notes" } };
           TASKDIALOGCONFIG  config         = {0};
 
           config.cbSize             = sizeof(config);
@@ -329,18 +409,37 @@ WinMain ( _In_ HINSTANCE hInstance,
           config.dwCommonButtons    = TDCBF_OK_BUTTON;
           config.pszMainIcon        = TD_INFORMATION_ICON;
 
-          if (installed)
+          if (installed) {
             config.pszMainInstruction = L"Tales of Symphonia Fix Installed";
-          else
+            config.pszContent         = L"Ensure that tsfix_enabler.exe and "
+                                        L"TOS.exe are setup to run as "
+                                        L"Administrator.\n\n\t"
+
+                                        L" >> Please DO NOT delete "
+                                        L"tsfix_enabler.exe without reading "
+                                        L"the correct uninstall procedure first.";
+
+            config.pButtons           = nullptr;
+            config.cButtons           = 0;
+          }
+          else {
             config.pszMainInstruction = L"Tales of Symphonia Fix Updated";
+            config.pszContent         = L"A new version of Special K (d3d9.dll) "
+                                        L"has been installed, please review the "
+                                        L"release notes carefully.";
 
-          config.pszContent         = L"Make sure to set tsfix_enabler.exe and TOS.exe to run as administrator.\n\n\t"
-                                      L" >> Please do not delete tsfix_enabler.exe without reading the correct uninstall procedure first.";
-
-          config.pButtons           = nullptr;
-          config.cButtons           = 0;
+            config.pButtons           = buttons;
+            config.cButtons           = ARRAYSIZE(buttons);
+          };
 
           TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
+
+          if (nButtonPressed == IDCONTINUE) {
+            ShellExecuteW ( NULL, L"open",
+                                  L"https://www.github.com/kaldaien/TSF/releases/latest",
+                            nullptr, nullptr,
+                              1 );
+          }
         }
       } else {
         int               nButtonPressed = 0;
@@ -392,13 +491,10 @@ WinMain ( _In_ HINSTANCE hInstance,
 
         TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
 
-      FreeLibrary (hModComCtl32);
-      FreeLibrary (hModShell32);
-
     return 0;
   }
 
-  if (CheckTouchServices () && GetFileAttributesW (L"touch_warning") == INVALID_FILE_ATTRIBUTES) {
+  if (CheckTouchServices () && GetFileAttributesW (L"tsfix.touchsrv") == INVALID_FILE_ATTRIBUTES) {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
 
@@ -414,17 +510,29 @@ WinMain ( _In_ HINSTANCE hInstance,
 
     TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
 
-    CreateFileW   ( L"touch_warning", GENERIC_WRITE, 0,
+    CreateFileW   ( L"tsfix.touchsrv", GENERIC_WRITE, 0,
                       nullptr, CREATE_NEW,
                         FILE_ATTRIBUTE_HIDDEN |
                         FILE_ATTRIBUTE_READONLY,
                           nullptr );
-  } else {
-    ShellExecuteW (NULL, L"open", L"TOS.exe", nullptr, nullptr, SW_SHOWNORMAL);
   }
 
-  FreeLibrary (hModComCtl32);
-  FreeLibrary (hModShell32);
+#if 0
+  if ( BMF_NvAPI_IsInit             != nullptr &&
+       BMF_NvAPI_SetAppName         != nullptr &&
+       BMF_NvAPI_SetAppFriendlyName != nullptr &&
+       BMF_NvAPI_SetLauncher        != nullptr &&
+       BMF_NvAPI_AddLauncherToProf  != nullptr ) {
+    if (BMF_NvAPI_IsInit ()) {
+      BMF_NvAPI_SetAppName         (L"TOS.exe");
+      BMF_NvAPI_SetAppFriendlyName (L"Tales of Symphonia");
+      BMF_NvAPI_SetLauncher        (L"TOS.exe");
+      BMF_NvAPI_AddLauncherToProf  ();
+    }
+  }
+#endif
+
+  ShellExecuteW (NULL, L"open", L"TOS.exe", nullptr, nullptr, SW_SHOWNORMAL);
 
   return 0;
 }
