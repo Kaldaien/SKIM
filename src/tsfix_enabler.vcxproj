@@ -158,7 +158,7 @@
       <AdditionalDependencies>kernel32.lib</AdditionalDependencies>
       <Driver>NotSet</Driver>
       <ManifestFile />
-      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <UACExecutionLevel>AsInvoker</UACExecutionLevel>
       <GenerateMapFile>true</GenerateMapFile>
       <MapExports>true</MapExports>
     </Link>

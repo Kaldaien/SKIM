@@ -344,6 +344,44 @@ TSF_IsAdmin (void)
 }
 
 
+#include <process.h>
+#include <tlhelp32.h>
+
+bool
+TSF_IsProcessRunning (const wchar_t* wszProcName)
+{
+  HANDLE         hProcSnap;
+  HANDLE         hProc;
+  PROCESSENTRY32 pe32;
+  DWORD          dwPriorityClass;
+
+  hProcSnap =
+    CreateToolhelp32Snapshot (TH32CS_SNAPPROCESS, 0);
+
+  if (hProcSnap == INVALID_HANDLE_VALUE)
+    return false;
+
+  pe32.dwSize = sizeof PROCESSENTRY32;
+
+  if (! Process32First (hProcSnap, &pe32)) {
+    CloseHandle (hProcSnap);
+    return false;
+  }
+
+  do {
+    if (! lstrcmpiW (wszProcName, pe32.szExeFile)) {
+      CloseHandle (hProcSnap);
+      return true;
+    }
+  } while (Process32Next (hProcSnap, &pe32));
+
+  CloseHandle (hProcSnap);
+
+  return false;
+}
+
+
+
 int
 CALLBACK
 WinMain ( _In_ HINSTANCE hInstance,
@@ -383,18 +421,40 @@ WinMain ( _In_ HINSTANCE hInstance,
     config.cbSize             = sizeof(config);
     config.hInstance          = hInstance;
     config.dwCommonButtons    = TDCBF_OK_BUTTON;
-    config.pszMainIcon        = TD_INFORMATION_ICON;
+    config.pszMainIcon        = TD_ERROR_ICON;
 
+    config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
     config.pszMainInstruction = L"Tales of Symphonia Fix Is Unusable";
-    config.pszContent         = L"Tales of Symphonia is not running as "
-                                L"an administrator and TSFix must exit."
-                                L"\n\n\t"
-
-                                L" >> Please configure the game to run "
-                                L"as administrator every time it starts.";
+    config.pszContent         = L"Elevated privileges are required.";
 
     config.pButtons           = nullptr;
     config.cButtons           = 0;
+
+    config.pszFooterIcon      = TD_SHIELD_ICON;
+    config.pszFooter          = L"Please configure the game to run as "
+                                L" an adminstrator.";
+
+    TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
+
+    ExitProcess (0);
+  }
+
+  if (TSF_IsProcessRunning (L"TOS.exe")) {
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof(config);
+    config.hInstance          = hInstance;
+    config.dwCommonButtons    = TDCBF_OK_BUTTON;
+    config.pszMainIcon        = TD_ERROR_ICON;
+
+    config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
+    config.pszMainInstruction = L"Tales of Symphonia Is Already Running";
+    config.pszContent         = L"Please exit the game first.";
+
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+    TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
 
     ExitProcess (0);
   }
@@ -453,6 +513,7 @@ WinMain ( _In_ HINSTANCE hInstance,
           TASKDIALOGCONFIG  config         = {0};
 
           config.cbSize             = sizeof(config);
+          config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
           config.hInstance          = hInstance;
           config.dwCommonButtons    = TDCBF_OK_BUTTON;
           config.pszMainIcon        = TD_INFORMATION_ICON;
@@ -461,14 +522,15 @@ WinMain ( _In_ HINSTANCE hInstance,
             config.pszMainInstruction = L"Tales of Symphonia Fix Installed";
             config.pszContent         = L"Ensure that tsfix_enabler.exe and "
                                         L"TOS.exe are setup to run as "
-                                        L"Administrator.\n\n\t"
-
-                                        L" >> Please DO NOT delete "
-                                        L"tsfix_enabler.exe without reading "
-                                        L"the correct uninstall procedure first.";
+                                        L"Administrator.";
 
             config.pButtons           = nullptr;
             config.cButtons           = 0;
+
+            config.pszFooterIcon      = TD_WARNING_ICON;
+            config.pszFooter          = L"DO NOT delete tsfix_enabler.exe without "
+                                        L"reading the correct uninstall procedure "
+                                        L"first.";
           }
           else {
             config.pszMainInstruction = L"Tales of Symphonia Fix Updated";
@@ -491,10 +553,10 @@ WinMain ( _In_ HINSTANCE hInstance,
         }
       } else {
         int               nButtonPressed = 0;
-  const TASKDIALOG_BUTTON buttons []     = { { IDOK, L"Okay" } };
         TASKDIALOGCONFIG  config         = {0};
 
         config.cbSize             = sizeof(config);
+        config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
         config.hInstance          = hInstance;
         config.dwCommonButtons    = TDCBF_OK_BUTTON;
         config.pszMainIcon        = TD_INFORMATION_ICON;
@@ -526,20 +588,6 @@ WinMain ( _In_ HINSTANCE hInstance,
 
   // Insufficient Privs
   else {
-        int               nButtonPressed = 0;
-        TASKDIALOGCONFIG  config         = {0};
-
-        config.cbSize             = sizeof(config);
-        config.dwCommonButtons    = TDCBF_OK_BUTTON;
-        config.pszMainIcon        = TD_SHIELD_ICON;
-        config.pszMainInstruction = L"Tales of Symphonia Fix Unusable";
-        config.pszContent         = L"This operation requires Administrative Priviliges; please run the game as administrator.";
-        config.pButtons           = nullptr;
-        config.cButtons           = 0;
-
-        TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
-
-    return 0;
   }
 
   if (CheckTouchServices () && GetFileAttributesW (L"tsfix.touchsrv") == INVALID_FILE_ATTRIBUTES) {
@@ -547,22 +595,30 @@ WinMain ( _In_ HINSTANCE hInstance,
     TASKDIALOGCONFIG  config         = {0};
 
     config.cbSize             = sizeof(config);
+    config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
     config.dwCommonButtons    = TDCBF_OK_BUTTON;
     config.pszMainIcon        = TD_WARNING_ICON;
     config.pszMainInstruction = L"TSFix Must Disable TabletInputService";
-    config.pszContent         = L"Touch Input Services are running and will cause the game to crash periodically,"
-                                L" TSFix is going to disable the service while Tales of Symphonia is running.\n\n"
-                                L" >> The services will be restored at game exit <<";
+    config.pszContent         = L"Touch Input Services are running and will cause the game to crash periodically.";
     config.pButtons           = nullptr;
     config.cButtons           = 0;
 
-    TaskDialogIndirect (&config, &nButtonPressed, NULL, NULL);
+    config.pszVerificationText =L"Do not display this message again";
 
-    CreateFileW   ( L"tsfix.touchsrv", GENERIC_WRITE, 0,
-                      nullptr, CREATE_NEW,
-                        FILE_ATTRIBUTE_HIDDEN |
-                        FILE_ATTRIBUTE_READONLY,
-                          nullptr );
+    config.pszFooterIcon      = TD_INFORMATION_ICON;
+    config.pszFooter          = L"The services will be restored at game exit.";
+
+    BOOL hide = FALSE;
+
+    TaskDialogIndirect (&config, &nButtonPressed, NULL, &hide);
+
+    if (hide) {
+      CreateFileW   ( L"tsfix.touchsrv", GENERIC_WRITE, 0,
+                        nullptr, CREATE_NEW,
+                          FILE_ATTRIBUTE_HIDDEN |
+                          FILE_ATTRIBUTE_READONLY,
+                            nullptr );
+    }
   }
 
 #if 0
