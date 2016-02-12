@@ -319,6 +319,31 @@ typedef HINSTANCE (WINAPI *ShellExecuteW_pfn)(
 
 ShellExecuteW_pfn ShellExecuteW = nullptr;
 
+
+bool
+TSF_IsAdmin (void)
+{
+  bool   bRet   = false;
+  HANDLE hToken = 0;
+
+
+  if (OpenProcessToken (GetCurrentProcess (), TOKEN_QUERY, &hToken)) {
+    TOKEN_ELEVATION Elevation;
+    DWORD cbSize = sizeof (TOKEN_ELEVATION);
+
+
+    if (GetTokenInformation (hToken, TokenElevation, &Elevation, sizeof (Elevation), &cbSize)) {
+      bRet = Elevation.TokenIsElevated != 0;
+    }
+  }
+
+  if (hToken)
+    CloseHandle (hToken);
+
+  return bRet;
+}
+
+
 int
 CALLBACK
 WinMain ( _In_ HINSTANCE hInstance,
@@ -350,6 +375,29 @@ WinMain ( _In_ HINSTANCE hInstance,
   TaskDialog         =
     (TaskDialog_pfn)
       Comctl32.getProcAddress ("TaskDialog");
+
+  if (! TSF_IsAdmin ()) {
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof(config);
+    config.hInstance          = hInstance;
+    config.dwCommonButtons    = TDCBF_OK_BUTTON;
+    config.pszMainIcon        = TD_INFORMATION_ICON;
+
+    config.pszMainInstruction = L"Tales of Symphonia Fix Is Unusable";
+    config.pszContent         = L"Tales of Symphonia is not running as "
+                                L"an administrator and TSFix must exit."
+                                L"\n\n\t"
+
+                                L" >> Please configure the game to run "
+                                L"as administrator every time it starts.";
+
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+
+    ExitProcess (0);
+  }
 
   ShellExecuteW =
     (ShellExecuteW_pfn)
