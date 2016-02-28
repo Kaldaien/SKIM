@@ -1,9 +1,129 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "stdafx.h"
 
-#include <Windows.h>
-
 #include <cstdint>
+
+const wchar_t*
+TSF_GetSteamDir (void)
+{
+         DWORD   len         = MAX_PATH;
+  static wchar_t wszSteamPath [MAX_PATH];
+
+  LSTATUS status =
+    RegGetValueW ( HKEY_CURRENT_USER,
+                     L"SOFTWARE\\Valve\\Steam\\",
+                       L"SteamPath",
+                         RRF_RT_REG_SZ,
+                           NULL,
+                             wszSteamPath,
+                               (LPDWORD)&len );
+
+  if (status == ERROR_SUCCESS)
+    return wszSteamPath;
+  else
+    return nullptr;
+}
+
+const wchar_t*
+TSF_FindInstallPath (void)
+{
+  typedef char* steam_library_t [MAX_PATH];
+
+#define MAX_STEAM_LIBRARIES 16
+  int             steam_libs = 0;
+  steam_library_t steam_lib_paths [MAX_STEAM_LIBRARIES] = { 0 };
+
+  static wchar_t wszGamePath [MAX_PATH];
+
+  const wchar_t* wszSteamPath =
+    TSF_GetSteamDir ();
+
+  if (wszSteamPath != nullptr) {
+    wchar_t wszLibraryFolders [MAX_PATH];
+
+    lstrcpyW (wszLibraryFolders, wszSteamPath);
+    lstrcatW (wszLibraryFolders, L"\\steamapps\\libraryfolders.vdf");
+
+    if (GetFileAttributesW (wszLibraryFolders) != INVALID_FILE_ATTRIBUTES) {
+      HANDLE hLibFolders =
+        CreateFileW ( wszLibraryFolders,
+                        GENERIC_READ,
+                          FILE_SHARE_READ,
+                            nullptr,
+                              OPEN_EXISTING,
+                                FILE_ATTRIBUTE_NORMAL,
+                                  nullptr );
+
+      if (hLibFolders != INVALID_HANDLE_VALUE) {
+        DWORD  dwSize,
+               dwSizeHigh,
+               dwRead;
+
+        // This isn't a 4+ GiB file... so who the heck cares about the high-bits?
+        dwSize = GetFileSize (hLibFolders, &dwSizeHigh);
+
+        void* data =
+          HeapAlloc (GetProcessHeap (), HEAP_ZERO_MEMORY, dwSize);
+
+        if (data == nullptr) {
+          CloseHandle (hLibFolders);
+          return nullptr;
+        }
+
+        dwRead = dwSize;
+
+        if (ReadFile (hLibFolders, data, dwSize, &dwRead, nullptr)) {
+          for (DWORD i = 0; i < dwSize; i++) {
+
+            if (((const char *)data) [i] == '"' && i < dwSize - 3) {
+
+              if (((const char *)data) [i + 2] == '"')
+                i += 2;
+              else if (((const char *)data) [i + 3] == '"')
+                i += 3;
+              else
+                continue;
+
+              char* lib_start = nullptr;
+
+              for (DWORD j = i; j < dwSize; j++,i++) {
+                if (((char *)data) [j] == '"' && lib_start == nullptr && j < dwSize - 1) {
+                  lib_start = &((char *)data) [j+1];
+                }
+                else if (((char *)data) [j] == '"') {
+                  ((char *)data) [j] = '\0';
+                  lstrcpyA ((char *)steam_lib_paths [steam_libs++], lib_start);
+                  lib_start = nullptr;
+                }
+              }
+            }
+          }
+        }
+
+        HeapFree (GetProcessHeap (), 0, data);
+
+        CloseHandle (hLibFolders);
+      }
+    }
+  }
+
+  // Search custom library paths first
+  if (steam_libs != 0) {
+    for (int i = 0; i < steam_libs; i++) {
+      char szTOSLauncher [MAX_PATH] = { 0 };
+      lstrcatA (szTOSLauncher, (char *)steam_lib_paths [i]);
+      lstrcatA (szTOSLauncher, "\\SteamApps\\common\\Tales of Symphonia\\TOS.exe");
+
+      if (GetFileAttributesA (szTOSLauncher) != INVALID_FILE_ATTRIBUTES) {
+        MultiByteToWideChar (CP_OEMCP, 0, (char *)steam_lib_paths [i], -1, wszGamePath, MAX_PATH);
+        return wszGamePath;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
 
 static uint32_t crc32_tab[] = { 
    0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 
@@ -77,10 +197,13 @@ file_crc32 (const wchar_t* wszFilename)
                             FILE_ATTRIBUTE_NORMAL,
                               nullptr );
 
-  if (hFile == 0)
+  if (hFile == INVALID_HANDLE_VALUE)
     return 0;
 
-  DWORD dwSize, dwSizeHigh, dwRead;
+  uint32_t filecrc32 = 0;
+  DWORD    dwSize,
+           dwSizeHigh,
+           dwRead;
 
   // This isn't a 4+ GiB file... so who the heck cares about the high-bits?
   dwSize = GetFileSize (hFile, &dwSizeHigh);
@@ -95,10 +218,10 @@ file_crc32 (const wchar_t* wszFilename)
 
   dwRead = dwSize;
 
-  ReadFile (hFile, data, dwSize, &dwRead, nullptr);
-
-  uint32_t filecrc32 =
-    crc32 (0x00, data, dwRead);
+  if (ReadFile (hFile, data, dwSize, &dwRead, nullptr)) {
+    filecrc32 =
+      crc32 (0x00, data, dwRead);
+  }
 
   HeapFree (GetProcessHeap (), 0, data);
 
@@ -126,10 +249,15 @@ CheckTouchServices (void)
                          SERVICE_CHANGE_CONFIG );
 
     if (tablet_svc) {
-      SERVICE_STATUS status;
-      QueryServiceStatus (tablet_svc, &status);
+      BOOL           queried = FALSE;
+      SERVICE_STATUS status  = { 0 };
 
-      if (status.dwCurrentState != SERVICE_STOPPED) {
+      status.dwCurrentState = SERVICE_STOPPED;
+
+      queried =
+        QueryServiceStatus (tablet_svc, &status);
+
+      if (queried && status.dwCurrentState != SERVICE_STOPPED) {
         running = true;
 
 // TSFix can do this by itself
@@ -158,7 +286,7 @@ CheckTouchServices (void)
 class iImportLibrary
 {
 public:
-               iImportLibrary (const wchar_t* wszName) { }
+               iImportLibrary (const wchar_t* wszName) { UNREFERENCED_PARAMETER(wszName); }
 
   virtual bool isLoaded (void) = 0;
 
@@ -186,7 +314,7 @@ public:
       refs_++;
   }
 
-  ~DLLImport (void) {
+  virtual ~DLLImport (void) {
     if (isLoaded ()) {
       refs_--;
       FreeLibrary (module_);
@@ -216,11 +344,7 @@ typedef void (__stdcall *BMF_NvAPI_SetAppFriendlyName_pfn)(const wchar_t* wszApp
 typedef void (__stdcall *BMF_NvAPI_SetLauncher_pfn)(const wchar_t* wszLauncherName);
 typedef BOOL (__stdcall *BMF_NvAPI_AddLauncherToProf_pfn)(void);
 
-
-#pragma comment (lib, "advapi32.lib")
-#pragma comment (lib, "user32.lib")
-#pragma comment (linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
-
+#if 0
 #include <pshpack1.h>
 typedef HRESULT (CALLBACK *PFTASKDIALOGCALLBACK)(_In_ HWND hwnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam, _In_ LONG_PTR lpRefData);
 
@@ -304,9 +428,11 @@ typedef HRESULT (WINAPI *TaskDialog_pfn)(
   _Out_opt_ int      *pnButton
 );
 
-
 TaskDialogIndirect_pfn TaskDialogIndirect = nullptr;
 TaskDialog_pfn         TaskDialog         = nullptr;
+#else
+#include <CommCtrl.h>
+#endif
 
 typedef HINSTANCE (WINAPI *ShellExecuteW_pfn)(
   _In_opt_ HWND    hwnd,
@@ -326,11 +452,9 @@ TSF_IsAdmin (void)
   bool   bRet   = false;
   HANDLE hToken = 0;
 
-
   if (OpenProcessToken (GetCurrentProcess (), TOKEN_QUERY, &hToken)) {
     TOKEN_ELEVATION Elevation;
     DWORD cbSize = sizeof (TOKEN_ELEVATION);
-
 
     if (GetTokenInformation (hToken, TokenElevation, &Elevation, sizeof (Elevation), &cbSize)) {
       bRet = Elevation.TokenIsElevated != 0;
@@ -351,9 +475,7 @@ bool
 TSF_IsProcessRunning (const wchar_t* wszProcName)
 {
   HANDLE         hProcSnap;
-  HANDLE         hProc;
   PROCESSENTRY32 pe32;
-  DWORD          dwPriorityClass;
 
   hProcSnap =
     CreateToolhelp32Snapshot (TH32CS_SNAPPROCESS, 0);
@@ -382,13 +504,73 @@ TSF_IsProcessRunning (const wchar_t* wszProcName)
 
 
 
+#include "winbase.h"
+
 int
-CALLBACK
-WinMain ( _In_ HINSTANCE hInstance,
-          _In_ HINSTANCE hPrevInstance,
-          _In_ LPSTR     lpCmdLine,
-          _In_ int       nCmdShow )
+WINAPI
+WinMain ( _In_     HINSTANCE hInstance,
+          _In_opt_ HINSTANCE hPrevInstance,
+          _In_     LPSTR     lpCmdLine,
+          _In_     int       nCmdShow )
 {
+UNREFERENCED_PARAMETER (nCmdShow);
+UNREFERENCED_PARAMETER (lpCmdLine);
+UNREFERENCED_PARAMETER (hPrevInstance);
+
+  if (GetFileAttributesW (L"TOS.exe") == INVALID_FILE_ATTRIBUTES) {
+    const wchar_t* wszInstallPath =
+      TSF_FindInstallPath ();
+
+    wchar_t wszTOSPath [MAX_PATH] = { L'\0' };
+
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof (config);
+    config.hInstance          = hInstance;
+    config.hwndParent         = GetDesktopWindow ();
+    config.pszWindowTitle     = L"Tales of Symphonia Fix (Installer)";
+    config.dwCommonButtons    = TDCBF_OK_BUTTON;
+    config.pszMainInstruction = L"Tales of Symphonia Install Directory";
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+
+    static wchar_t wszDefaultInstallPath [MAX_PATH];
+    if (wszInstallPath == nullptr) {
+      const wchar_t* wszSteamPath =
+        TSF_GetSteamDir ();
+
+      if (wszSteamPath != nullptr) {
+        wszDefaultInstallPath [0] = L'\0';
+        lstrcatW (wszDefaultInstallPath, wszSteamPath);
+        lstrcatW (wszDefaultInstallPath, L"\\SteamApps\\common\\Tales of Symphonia\\TOS.exe");
+
+        if (GetFileAttributesW (wszDefaultInstallPath) != INVALID_FILE_ATTRIBUTES) {
+          lstrcatW (wszTOSPath, wszSteamPath);
+          lstrcatW (wszTOSPath, L"\\SteamApps\\common\\Tales of Symphonia");
+        }
+      }
+    } else {
+      lstrcpyW (wszTOSPath, wszInstallPath);
+      lstrcatW (wszTOSPath, L"\\SteamApps\\common\\Tales of Symphonia");
+    }
+
+    if (*wszTOSPath != L'\0' ) {
+      config.pszMainIcon        = TD_INFORMATION_ICON;
+      config.pszContent         = wszTOSPath;
+      config.pszFooterIcon      = TD_INFORMATION_ICON;
+      config.pszFooter          = L"Please unpack the contents of tsfix.zip to this directory.";
+    } else {
+      config.pszMainIcon        = TD_ERROR_ICON;
+      config.pszContent         = L"Unable to locate Tales of Symphonia!";
+      config.pszMainIcon        = TD_WARNING_ICON;
+      config.pszFooter          = L"Steam is not correctly installed, you will have to fix this.";
+    }
+
+    TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
+    ExitProcess        (0);
+  }
+
 #if 0
   DLLImport D3D9 ("d3d9.dll");
 
@@ -405,14 +587,14 @@ WinMain ( _In_ HINSTANCE hInstance,
 #endif
 
   DLLImport Shell32  (L"Shell32.dll");
-  DLLImport Comctl32 (L"Comctl32.dll");
+  //DLLImport Comctl32 (L"Comctl32.dll");
 
-  TaskDialogIndirect =
-    (TaskDialogIndirect_pfn)
-    Comctl32.getProcAddress ("TaskDialogIndirect");
-  TaskDialog         =
-    (TaskDialog_pfn)
-      Comctl32.getProcAddress ("TaskDialog");
+  //TaskDialogIndirect =
+    //(TaskDialogIndirect_pfn)
+      //Comctl32.getProcAddress ("TaskDialogIndirect");
+  //TaskDialog         =
+    //(TaskDialog_pfn)
+      //Comctl32.getProcAddress ("TaskDialog");
 
   if (! TSF_IsAdmin ()) {
     int               nButtonPressed = 0;
@@ -420,6 +602,7 @@ WinMain ( _In_ HINSTANCE hInstance,
 
     config.cbSize             = sizeof(config);
     config.hInstance          = hInstance;
+    config.hwndParent         = GetDesktopWindow ();
     config.dwCommonButtons    = TDCBF_OK_BUTTON;
     config.pszMainIcon        = TD_ERROR_ICON;
 
@@ -445,6 +628,7 @@ WinMain ( _In_ HINSTANCE hInstance,
 
     config.cbSize             = sizeof(config);
     config.hInstance          = hInstance;
+    config.hwndParent         = GetDesktopWindow ();
     config.dwCommonButtons    = TDCBF_OK_BUTTON;
     config.pszMainIcon        = TD_ERROR_ICON;
 
@@ -515,6 +699,7 @@ WinMain ( _In_ HINSTANCE hInstance,
           config.cbSize             = sizeof(config);
           config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
           config.hInstance          = hInstance;
+          config.hwndParent         = GetDesktopWindow ();
           config.dwCommonButtons    = TDCBF_OK_BUTTON;
           config.pszMainIcon        = TD_INFORMATION_ICON;
 
@@ -558,6 +743,7 @@ WinMain ( _In_ HINSTANCE hInstance,
         config.cbSize             = sizeof(config);
         config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
         config.hInstance          = hInstance;
+        config.hwndParent         = GetDesktopWindow ();
         config.dwCommonButtons    = TDCBF_OK_BUTTON;
         config.pszMainIcon        = TD_INFORMATION_ICON;
         config.pszMainInstruction = L"Tales of Symphonia Fix Uninstalled";
@@ -595,6 +781,8 @@ WinMain ( _In_ HINSTANCE hInstance,
     TASKDIALOGCONFIG  config         = {0};
 
     config.cbSize             = sizeof(config);
+    config.hInstance          = hInstance;
+    config.hwndParent         = GetDesktopWindow ();
     config.pszWindowTitle     = L"Tales of Symphonia Fix (Enabler)";
     config.dwCommonButtons    = TDCBF_OK_BUTTON;
     config.pszMainIcon        = TD_WARNING_ICON;
@@ -603,7 +791,8 @@ WinMain ( _In_ HINSTANCE hInstance,
     config.pButtons           = nullptr;
     config.cButtons           = 0;
 
-    config.pszVerificationText =L"Do not display this message again";
+    config.pszVerificationText = L"Do not display this message again";
+    config.dwFlags            |= TDF_VERIFICATION_FLAG_CHECKED;
 
     config.pszFooterIcon      = TD_INFORMATION_ICON;
     config.pszFooter          = L"The services will be restored at game exit.";
