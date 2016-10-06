@@ -199,7 +199,7 @@ SKIM_GetLoadAppInitDLLs32 (void)
                       L"Software\\Microsoft\\Windows NT\\CurrentVersion\\"
                       L"Windows",
                           0x00,
-                            KEY_WOW64_32KEY | KEY_READ | KEY_WRITE,
+                            KEY_WOW64_32KEY | KEY_READ,
                               &key );
   status =
     RegGetValueW ( key,
@@ -360,7 +360,7 @@ SKIM_GetLoadAppInitDLLs64 (void)
                       L"Software\\Microsoft\\Windows NT\\CurrentVersion\\"
                       L"Windows",
                           0x00,
-                            KEY_WOW64_64KEY | KEY_READ | KEY_WRITE,
+                            KEY_WOW64_64KEY | KEY_READ,
                               &key );
   status =
     RegGetValueW ( key,
