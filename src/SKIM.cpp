@@ -6,8 +6,24 @@
 
 #include "stdafx.h"
 
-#include <cstdint>
 #include <ShellAPI.h>
+
+#include <CommCtrl.h>
+
+#include <process.h>
+#include <tlhelp32.h>
+
+#include <Shlobj.h>
+#pragma comment (lib, "shell32.lib")
+#pragma comment (lib, "Ole32.lib")
+
+#include <Shlwapi.h>
+#pragma comment (lib, "shlwapi.lib")
+
+#include <cstdint>
+
+#include <string>
+#include <algorithm>
 
 #include "Resource.h"
 
@@ -156,9 +172,6 @@ struct sk_product_t {
     0
   }
 };
-
-#include <cstdint>
-#include <string>
 
 const wchar_t*
 SKIM_GetSteamDir (void)
@@ -356,11 +369,19 @@ SKIM_FindInstallPath (uint32_t appid)
           }
 
           char* szInstallDir =
-            strstr (szManifestData, "\"installdir\"");
+            StrStrIA (szManifestData, "\"installdir\"");
 
           char szGamePath [MAX_PATH] = { '\0' };
 
           if (szInstallDir != nullptr) {
+            std::string install_dir (szInstallDir);
+            std::transform ( install_dir.begin     (),
+                               install_dir.end     (),
+                                 install_dir.begin (),
+                                   tolower );
+
+            strcpy (szInstallDir, install_dir.c_str ());
+
             sscanf ( szInstallDir,
                        "\"installdir\" \"%259[^\"]\"",
                          szGamePath );
@@ -423,11 +444,19 @@ SKIM_FindInstallPath (uint32_t appid)
       }
 
       char* szInstallDir =
-        strstr (szManifestData, "\"installdir\"");
+        StrStrIA (szManifestData, "\"installdir\"");
 
       char szGamePath [MAX_PATH] = { '\0' };
 
       if (szInstallDir != nullptr) {
+        std::string install_dir (szInstallDir);
+        std::transform ( install_dir.begin     (),
+                           install_dir.end     (),
+                             install_dir.begin (),
+                               tolower );
+
+        strcpy (szInstallDir, install_dir.c_str ());
+
         sscanf ( szInstallDir,
                    "\"installdir\" \"%259[^\"]\"",
                      szGamePath );
@@ -611,8 +640,6 @@ private:
   uint32_t refs_;
 };
 
-#include <CommCtrl.h>
-
 bool
 SKIM_IsAdmin (void)
 {
@@ -633,10 +660,6 @@ SKIM_IsAdmin (void)
 
   return bRet;
 }
-
-
-#include <process.h>
-#include <tlhelp32.h>
 
 bool
 SKIM_IsProcessRunning (const wchar_t* wszProcName)
@@ -668,13 +691,6 @@ SKIM_IsProcessRunning (const wchar_t* wszProcName)
 
   return false;
 }
-
-#include <Shlobj.h>
-#pragma comment (lib, "shell32.lib")
-#pragma comment (lib, "Ole32.lib")
-
-#include <Shlwapi.h>
-#pragma comment (lib, "shlwapi.lib")
 
 bool
 SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
@@ -1085,6 +1101,8 @@ SKIM_UninstallProduct (sk_product_t product, HWND parent_dlg)
                  wszUninstall,
                    L"Uninstall Success",
                      MB_OK | MB_ICONINFORMATION );
+
+  ExitProcess (0x00);
 }
 
 unsigned int
@@ -1145,19 +1163,19 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
       config.pszContent       = L"Please grab the x86"
                                 L" version from <a href=\""
                                 L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=48145\">here</a>"
+                                L"download/details.aspx?id=53587\">here</a>"
                                 L" to continue.";
     } else if (product.architecture == SK_64_BIT) {
       config.pszContent       = L"Please grab the x64"
                                 L" version from <a href=\""
                                 L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=48145\">here</a>"
+                                L"download/details.aspx?id=53587\">here</a>"
                                 L" to continue.";
     } else {
       config.pszContent       = L"Please grab _BOTH_, the x86 and x64 "
                                 L"versions from <a href=\""
                                 L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=48145\">here</a>"
+                                L"download/details.aspx?id=53587\">here</a>"
                                 L" to continue.";
     }
 

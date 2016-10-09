@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="AppInit_DLLs.cpp" />
+    <ClCompile Include="SKIM.cpp" />
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="DLC.cpp">
+      <Filter>DLC</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AppInit_DLLs.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="targetver.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="SKIM.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="DLC">
+      <UniqueIdentifier>{09b3bea6-2a10-45ca-af8a-dbe9d5fe31d4}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
