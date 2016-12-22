@@ -158,7 +158,7 @@ SKIM_GetAppInitDLLs32 (void)
 void
 SKIM_SetAppInitDLLs32 (const wchar_t* wszAppInit_DLLs)
 {
-  DWORD len = wcslen (wszAppInit_DLLs);
+  size_t  len           = wcslen (wszAppInit_DLLs);
 
   LSTATUS status        = ERROR;
   HKEY    key           = nullptr;
@@ -178,7 +178,7 @@ SKIM_SetAppInitDLLs32 (const wchar_t* wszAppInit_DLLs)
                          0,
                            REG_SZ,
                              (BYTE *)wszAppInit_DLLs,
-                               len * sizeof (wchar_t) );
+                               (DWORD)(len * sizeof (wchar_t)) );
 
   RegFlushKey (key);
   RegCloseKey (key);
@@ -319,7 +319,7 @@ SKIM_GetAppInitDLLs64 (void)
 void
 SKIM_SetAppInitDLLs64 (const wchar_t* wszAppInit_DLLs)
 {
-  DWORD len = wcslen (wszAppInit_DLLs);
+  size_t  len           = wcslen (wszAppInit_DLLs);
 
   LSTATUS status        = ERROR;
   HKEY    key           = nullptr;
@@ -339,7 +339,7 @@ SKIM_SetAppInitDLLs64 (const wchar_t* wszAppInit_DLLs)
                          0,
                            REG_SZ,
                              (BYTE *)wszAppInit_DLLs,
-                               len * sizeof (wchar_t) );
+                               (DWORD)(len * sizeof (wchar_t)) );
 
   RegFlushKey (key);
   RegCloseKey (key);

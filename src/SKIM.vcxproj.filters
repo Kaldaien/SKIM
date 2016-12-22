@@ -7,12 +7,18 @@
     <ClCompile Include="DLC.cpp">
       <Filter>DLC</Filter>
     </ClCompile>
+    <ClCompile Include="ImageDataObject.cpp" />
+    <ClCompile Include="ini.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppInit_DLLs.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="APP_VERSION.H" />
+    <ClInclude Include="ImageDataObject.h" />
+    <ClInclude Include="ini.h" />
+    <ClInclude Include="branch.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="SKIM.rc" />
@@ -21,5 +27,8 @@
     <Filter Include="DLC">
       <UniqueIdentifier>{09b3bea6-2a10-45ca-af8a-dbe9d5fe31d4}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\..\..\..\Desktop\donate.bmp" />
   </ItemGroup>
 </Project>
