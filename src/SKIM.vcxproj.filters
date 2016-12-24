@@ -7,7 +7,6 @@
     <ClCompile Include="DLC.cpp">
       <Filter>DLC</Filter>
     </ClCompile>
-    <ClCompile Include="ImageDataObject.cpp" />
     <ClCompile Include="ini.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -16,7 +15,6 @@
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="APP_VERSION.H" />
-    <ClInclude Include="ImageDataObject.h" />
     <ClInclude Include="ini.h" />
     <ClInclude Include="branch.h" />
   </ItemGroup>
@@ -30,5 +28,11 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="..\..\..\..\Desktop\donate.bmp" />
+    <Image Include="..\..\..\..\desktop\bitmap2.bmp" />
+    <Image Include="..\..\..\..\Desktop\donate_hand.png" />
+    <Image Include="..\donate.bmp" />
+    <Image Include="..\..\..\..\Desktop\btn_donate_cc_147x47.png" />
+    <Image Include="..\..\..\..\Desktop\btn_donate_cc_147x47.bmp" />
+    <Image Include="..\SKIM.ico" />
   </ItemGroup>
 </Project>

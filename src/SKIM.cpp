@@ -32,6 +32,18 @@
 #include "ini.h"
 #include "branch.h"
 
+#include <CommCtrl.h>
+#pragma comment (lib,    "advapi32.lib")
+#pragma comment (lib,    "user32.lib")
+#pragma comment (lib,    "comctl32.lib")
+#pragma comment (linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' "  \
+                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df'" \
+                         " language='*'\"")
+#include <Richedit.h>
+
+HICON       hIconSKIM;
+HINSTANCE g_hInstance;
+
 bool child = false;
 wchar_t startup_dir [MAX_PATH + 1] = { L'\0' };
 
@@ -55,6 +67,9 @@ enum SK_ARCHITECTURE {
 
   SK_BOTH_BIT = 0x03
 };
+
+void
+SKIM_OnProductSelect (void);
 
 struct sk_product_t {
   wchar_t         wszWrapper     [MAX_PATH];
@@ -91,8 +106,8 @@ struct sk_product_t {
     L"Applies Special K's non-game-specific features to all Steam games "
     L"launched on your system.\r\n\r\n"
 
-    L"These include things like Steam achievement unlock sound, "
-    L"mouse cursor fixes and various framerate enhancing options "
+    L"Includes Steam achievement unlock sound, "
+    L"mouse cursor management and various framerate enhancing options "
     L"for D3D9/11/12 games.\r\n\r\n",
     0
   },
@@ -1228,10 +1243,10 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     TASKDIALOGCONFIG  config         = {0};
 
     config.cbSize             = sizeof (config);
-    config.hInstance          = GetModuleHandle (nullptr);
+    config.hInstance          = g_hInstance;
     config.hwndParent         = GetActiveWindow ();
     config.pszWindowTitle     = L"Special K Install Manager (Fatal Error)";
-    config.dwCommonButtons    = 0;//TDCBF_OK_BUTTON;
+    config.dwCommonButtons    = 0;
     config.pszMainInstruction = L"Missing Visual C++ 2015 Runtime";
     config.pButtons           = nullptr;
     config.cButtons           = 0;
@@ -1399,12 +1414,6 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     wchar_t wszInstallerINI [MAX_PATH] = { L'\0' };
     wchar_t wszRepoINI      [MAX_PATH] = { L'\0' };
 
-    wsprintf ( wszInstallerINI,
-                 L"%s\\Version\\installed.ini",
-                   wszInstallPath );
-
-    DeleteFileW (wszInstallerINI);
-
     wsprintf ( wszRepoINI,
                  L"%s\\Version\\repository.ini",
                    wszInstallPath );
@@ -1440,6 +1449,9 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
     SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
   }
+
+  SKIM_OnProductSelect          ();
+  SKIM_BranchManager::singleton ()->setProduct (-1);
 
   return 0;
 }
@@ -1675,14 +1687,18 @@ SKIM_OnBranchSelect (void)
   }
 
   if ((! SKIM_DetermineInstallState (products [sel])) || count < 1) {
-    SendMessage  (hWndStatusBar, SB_SETTEXT, LOBYTE (0) | HIBYTE (0), (LPARAM)L"Not Installed");
+    SendMessage  ( hWndStatusBar,
+                    SB_SETTEXT,
+                      LOBYTE (0) | HIBYTE (0),
+                        (LPARAM)L"\tNot Installed" );
+
     EnableWindow (hWndBrachMigrate, FALSE);
   }
 
   else {
     wchar_t wszStatus [256];
     swprintf ( wszStatus,
-                 L"%s (%s)",
+                 L"\t%s        (%s)",
                   SKIM_BranchManager::singleton ()->getInstallPackage ().c_str (),
                     SKIM_GetProductBranchByIdx (
                       &products [sel],
@@ -1696,6 +1712,8 @@ SKIM_OnBranchSelect (void)
                         (LPARAM)wszStatus );
   }
 }
+
+HWND hWndRichProductDescrip;
 
 void
 SKIM_OnProductSelect (void)
@@ -1717,11 +1735,17 @@ SKIM_OnProductSelect (void)
       SKIM_SummarizeRenderAPI (products [sel]).c_str ()
   );
 
-  HWND hWndDescrip =
-    GetDlgItem (hWndMainDlg, IDC_PRODUCT_DETAILS);
+  CHARFORMAT2W cf2;
+  ZeroMemory (&cf2, sizeof CHARFORMAT2W);
 
-  Edit_SetText (hWndDescrip, products [sel].wszDescription);
+  cf2.cbSize = sizeof CHARFORMAT2W;
 
+  cf2.crTextColor = RGB (0, 0, 0);
+  cf2.dwMask      = CFM_COLOR;
+
+  SendMessage (hWndRichProductDescrip, EM_SETSEL,        0,             -1);
+  SendMessage (hWndRichProductDescrip, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf2);
+  SendMessage (hWndRichProductDescrip, EM_REPLACESEL,    FALSE,         (LPARAM)products [sel].wszDescription);
 
   HICON btn_icon = 0;
 
@@ -1785,80 +1809,11 @@ SKIM_OnProductSelect (void)
       Button_Enable (hWndManage, 1);
     else if (products [sel].uiSteamAppID == 374320)
       Button_Enable (hWndManage, 1);
+    else if (products [sel].uiSteamAppID == 351970)
+      Button_Enable (hWndManage, 1);
     else
       Button_Enable (hWndManage, 0);
   }
-
-#if 0
-  struct SKIM_Control {
-    HWND hWndParent;
-    HWND hWndCtl;
-    RECT rgWin;
-
-    SKIM_Control (HWND hDlg, UINT nIDDlgItem) :
-                        hWndParent (                     hDlg               ),
-                        hWndCtl    ( GetDlgItem        ( hDlg, nIDDlgItem ) ),
-                        rgWin      ( SKIM_GetHWNDRect  (      hWndCtl     ) ) {
-      rgWin.top    -= SKIM_GetHWNDRect (hWndParent).top - SKIM_GetClientRect (hWndParent).top;
-      rgWin.bottom -= SKIM_GetHWNDRect (hWndParent).top - SKIM_GetClientRect (hWndParent).top;
-
-      rgWin.left    -= SKIM_GetHWNDRect (hWndParent).left - SKIM_GetClientRect (hWndParent).left;
-      rgWin.right   -= SKIM_GetHWNDRect (hWndParent).left - SKIM_GetClientRect (hWndParent).left;
-    };
-
-    LONG getTop    (void) { return rgWin.top;  };
-    LONG getLeft   (void) { return rgWin.left; };
-
-    LONG getWidth  (void) { return SKIM_GetHWNDRect  (      hWndCtl     ).right  - SKIM_GetHWNDRect  (      hWndCtl     ).left; };
-    LONG getHeight (void) { return SKIM_GetHWNDRect  (      hWndCtl     ).bottom - SKIM_GetHWNDRect  (      hWndCtl     ).top; };
-
-    void shrinkControl ( LONG x,
-                         LONG y,
-                         bool shrink_top  = false,
-                         bool shrink_left = false )
-    {
-      LONG left = getLeft (),
-           top  = getTop  ();
-
-      if (shrink_left)
-        left += x;
-
-      if (shrink_top)
-        top += y;
-
-      LONG width  = getWidth  () - x,
-           height = getHeight () - y;
-
-      MoveWindow ( hWndCtl,
-                     left, top,
-                       width, height,
-                         TRUE );
-    }
-
-    void growControl ( LONG x,
-                       LONG y,
-                       bool grow_top  = false,
-                       bool grow_left = false )
-    {
-      LONG left = getLeft (),
-           top  = getTop  ();
-
-      if (grow_left)
-        left -= x;
-
-      if (grow_top)
-        top -= y;
-
-      LONG width  = getWidth  () + x,
-           height = getHeight () + y;
-
-      MoveWindow ( hWndCtl,
-                     left, top,
-                       width, height,
-                         TRUE );
-    }
-  } static product_desc (hWndMainDlg, IDC_PRODUCT_DETAILS);
-#endif
 
   static HWND
        hWndBranchSelect =
@@ -1887,6 +1842,34 @@ Main_DlgProc (
   switch (uMsg) {
     case WM_INITDIALOG:
     {
+      SendMessage (hWndDlg, WM_SETICON, ICON_BIG,   (LPARAM)hIconSKIM);
+      SendMessage (hWndDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIconSKIM);
+
+      static bool init = false;
+
+      if (! init) {
+        INITCOMMONCONTROLSEX icex;
+        ZeroMemory (&icex, sizeof INITCOMMONCONTROLSEX);
+
+        icex.dwSize = sizeof INITCOMMONCONTROLSEX;
+        icex.dwICC  = ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
+
+        InitCommonControlsEx (&icex);
+
+        LoadLibrary (L"msftedit.dll");
+
+        CoInitializeEx (nullptr, COINIT_MULTITHREADED);
+
+        init = true;
+      }
+
+      hWndRichProductDescrip =
+        CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("RichTextHere"),
+                           WS_VISIBLE | WS_CHILD | ES_READONLY | ES_MULTILINE|
+                           ES_LEFT    | WS_DISABLED,
+                           210,85,230,140,
+                           hWndDlg, NULL, g_hInstance, NULL );
+
       hWndStatusBar =
         CreateWindowEx ( 0, STATUSCLASSNAME,
                            nullptr,
@@ -1895,7 +1878,7 @@ Main_DlgProc (
                                 0, 0, 0, 0,
                                   hWndDlg,
                                     (HMENU)IDC_STATUS,
-                                        GetModuleHandle (nullptr), nullptr);
+                                        g_hInstance, nullptr);
 
       SetCurrentDirectory (startup_dir);
 
@@ -1944,6 +1927,17 @@ Main_DlgProc (
           }
         } break;
 
+        case IDC_DONATE:
+        {
+          int sel = ComboBox_GetCurSel (hWndProducts);
+
+          wchar_t wszURL [1024];
+          wsprintf ( wszURL,
+                       L"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=%s",
+                         products [sel].wszDonateID );
+
+          ShellExecuteW (NULL, L"OPEN", wszURL, nullptr, nullptr, SW_SHOWMAXIMIZED);
+        } break;
 
         case IDC_MIGRATE_CMD:
         {
@@ -1957,8 +1951,6 @@ Main_DlgProc (
 
           SKIM_BranchManager::singleton ()->migrateToBranch (wszSel);
           SKIM_BranchManager::singleton ()->setProduct (-1);
-
-          SKIM_OnProductSelect ();
         }// break;
 
         case IDC_INSTALL_CMD:
@@ -2005,6 +1997,39 @@ Main_DlgProc (
                                  0x00, nullptr );
           }
 
+          else if (product.uiSteamAppID == 351970) {
+            STARTUPINFO         sinfo = { 0 };
+            PROCESS_INFORMATION pinfo = { 0 };
+
+            sinfo.cb          = sizeof STARTUPINFO;
+            sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+            sinfo.wShowWindow = SW_SHOWNORMAL;
+
+            SetCurrentDirectory (
+              SKIM_FindInstallPath (product.uiSteamAppID)
+            );
+
+            CreateProcess ( L"tzt.exe",
+                              nullptr,
+                                nullptr, nullptr,
+                                  FALSE, 0x00,
+                                    nullptr, SKIM_FindInstallPath (product.uiSteamAppID),
+                                      &sinfo, &pinfo );
+
+            if (hWndMainDlg != 0) {
+              ShowWindow (hWndMainDlg, SW_HIDE);
+            }
+
+            if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0) {
+              CloseHandle (pinfo.hThread);
+              CloseHandle (pinfo.hProcess);
+            }
+
+            ShowWindow          (hWndMainDlg, SW_SHOW);
+            SetForegroundWindow (hWndMainDlg);
+            SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
+          }
+
           else if (product.uiSteamAppID == 374320) {
             STARTUPINFO         sinfo = { 0 };
             PROCESS_INFORMATION pinfo = { 0 };
@@ -2037,7 +2062,6 @@ Main_DlgProc (
             SetForegroundWindow (hWndMainDlg);
             SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
           }
-          //PostMessage (hWndMainDlg, WM_CLOSE, 0, 0);
         }  break;
 
         case IDC_UNINSTALL_CMD:
@@ -2228,7 +2252,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
     TASKDIALOGCONFIG  config         = {0};
 
     config.cbSize             = sizeof (config);
-    config.hInstance          = GetModuleHandle (nullptr);
+    config.hInstance          = g_hInstance;
     config.hwndParent         = hWndParent;
     config.pszWindowTitle     = L"Special K Install Manager";
     config.dwCommonButtons    = 0;//TDCBF_OK_BUTTON;
@@ -2251,6 +2275,10 @@ SKIM_InstallGlobalInjector (LPVOID user)
 #else
   PostMessage ((HWND)hWndParent, WM_CLOSE, 0x00, 0x00);
 #endif
+
+  SKIM_OnProductSelect          ();
+  SKIM_BranchManager::singleton ()->setProduct (-1);
+
   return 0;
 }
 
@@ -2261,6 +2289,9 @@ wWinMain ( _In_     HINSTANCE hInstance,
            _In_     LPWSTR    lpCmdLine,
            _In_     int       nCmdShow )
 {
+  g_hInstance =           hInstance;
+  hIconSKIM   = LoadIcon (hInstance, MAKEINTRESOURCE (IDI_ICON1));
+
   GetCurrentDirectoryW (MAX_PATH, startup_dir);
 
   for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++) {
@@ -2275,7 +2306,7 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
   wchar_t wszTitle [128] = { L'\0' };
   lstrcatW ( wszTitle,
-                L"Special K Install Manager - (v. " );
+                L"Special K Install Manager - (v " );
   lstrcatW ( wszTitle,
                 SKIM_VERSION_STR_W );
   lstrcatW ( wszTitle,
@@ -2333,7 +2364,6 @@ wWinMain ( _In_     HINSTANCE hInstance,
             nullptr,
               0,
                 SKIM_UninstallProduct, SKIM_FindProductByAppID (0), 0x00, nullptr);
-        //PostMessage           (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
       }
     }
   }

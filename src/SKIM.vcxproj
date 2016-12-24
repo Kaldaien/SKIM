@@ -237,7 +237,6 @@
     <ClInclude Include="AppInit_DLLs.h" />
     <ClInclude Include="APP_VERSION.H" />
     <ClInclude Include="branch.h" />
-    <ClInclude Include="ImageDataObject.h" />
     <ClInclude Include="ini.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
@@ -246,7 +245,6 @@
   <ItemGroup>
     <ClCompile Include="AppInit_DLLs.cpp" />
     <ClCompile Include="DLC.cpp" />
-    <ClCompile Include="ImageDataObject.cpp" />
     <ClCompile Include="ini.cpp" />
     <ClCompile Include="SKIM.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
@@ -268,7 +266,13 @@
     <ResourceCompile Include="SKIM.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\..\..\..\desktop\bitmap2.bmp" />
+    <Image Include="..\..\..\..\Desktop\btn_donate_cc_147x47.bmp" />
+    <Image Include="..\..\..\..\Desktop\btn_donate_cc_147x47.png" />
     <Image Include="..\..\..\..\Desktop\donate.bmp" />
+    <Image Include="..\..\..\..\Desktop\donate_hand.png" />
+    <Image Include="..\donate.bmp" />
+    <Image Include="..\SKIM.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
