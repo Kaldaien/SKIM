@@ -145,7 +145,7 @@ protected:
 
       while (it != branches.end ())
       {
-        if (! wcsicmp (wszName, it->name.c_str ()))
+        if (! _wcsicmp (wszName, it->name.c_str ()))
           return &(*it);
 
         ++idx, ++it;

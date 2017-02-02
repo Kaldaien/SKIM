@@ -22,11 +22,94 @@
 #define _CRT_NON_CONFORMING_SWPRINTFS
 
 #include <windows.h>
+#include <string>
+#include <sys/stat.h>
 
 #include "ini.h"
-#include <string>
+
+std::wstring
+ErrorMessage (errno_t        err,
+              const char*    args,
+              const wchar_t* ini_name,
+              UINT           line_no,
+              const char*    function_name,
+              const char*    file_name)
+{
+  wchar_t wszFormattedError [1024];
+
+  *wszFormattedError = L'\0';
+
+  swprintf ( wszFormattedError, 1024,
+             L"\n"
+             L"Line %u of %hs (in %hs (...)):\n"
+             L"------------------------\n\n"
+             L"%hs\n\n  File: %s\n\n"
+             L"\t>> %s <<",
+               line_no,
+                 file_name,
+                   function_name,
+                     args,
+                       ini_name,
+                         _wcserror (err) );
+
+  return wszFormattedError;\
+}
 
 #define TRY_FILE_IO(x,y,z) { (z) = ##x; }
+
+uint64_t
+__stdcall
+SK_GetFileSize (const wchar_t* wszFile)
+{
+  WIN32_FILE_ATTRIBUTE_DATA
+    file_attrib_data = { 0 };
+
+  if ( GetFileAttributesEx ( wszFile,
+                               GetFileExInfoStandard,
+                                 &file_attrib_data ) )
+  {
+    return ULARGE_INTEGER { file_attrib_data.nFileSizeLow,
+                            file_attrib_data.nFileSizeHigh }.QuadPart;
+  }
+
+  return 0ULL;
+}
+
+bool
+SK_CreateDirectories ( const wchar_t* wszPath )
+{
+  wchar_t* wszSubDir        = _wcsdup (wszPath), *iter;
+  wchar_t* wszLastSlash     = wcsrchr (wszSubDir, L'/');
+  wchar_t* wszLastBackslash = wcsrchr (wszSubDir, L'\\');
+
+  if (wszLastSlash > wszLastBackslash)
+    *wszLastSlash = L'\0';
+  else if (wszLastBackslash != nullptr)
+    *wszLastBackslash = L'\0';
+  else {
+    free (wszSubDir);
+    return false;
+  }
+
+  for (iter = wszSubDir; *iter != L'\0'; iter = CharNextW (iter)) {
+    if (*iter == L'\\' || *iter == L'/') {
+      *iter = L'\0';
+
+      if (GetFileAttributes (wszPath) == INVALID_FILE_ATTRIBUTES)
+        CreateDirectoryW (wszSubDir, nullptr);
+
+      *iter = L'\\';
+    }
+
+    // The final subdirectory (FULL PATH)
+    if (GetFileAttributes (wszPath) == INVALID_FILE_ATTRIBUTES)
+      CreateDirectoryW (wszSubDir, nullptr);
+  }
+
+  free (wszSubDir);
+
+  return true;
+}
 
 iSK_INI::iSK_INI (const wchar_t* filename)
 {
@@ -36,26 +119,23 @@ iSK_INI::iSK_INI (const wchar_t* filename)
 
   // We skip a few bytes (Unicode BOM) in crertain cirumstances, so this is the
   //   actual pointer we need to free...
-  wchar_t* alloc;
+  wchar_t* alloc = nullptr;
 
   wszName = _wcsdup (filename);
 
   errno_t ret = 0;
   TRY_FILE_IO (_wfsopen (filename, L"rb", _SH_DENYNO), filename, fINI);
 
-  if (ret == 0 && fINI != 0) {
-                fseek  (fINI, 0, SEEK_END);
-    long size = ftell  (fINI);
-                rewind (fINI);
+  if (ret == 0 && fINI != 0)
+  {
+    long size = (long)SK_GetFileSize (filename);
 
     wszData = new wchar_t [size + 1];
     alloc   = wszData;
 
-    ZeroMemory (wszData, sizeof (wchar_t) * size + 1);
+    ZeroMemory (wszData, sizeof (wchar_t) * ((unsigned long)size + 1UL));
 
     fread (wszData, size, 1, fINI);
-
-    bool unicode = true;
 
     // First, consider Unicode
     // UTF16-LE  (All is well in the world)
@@ -336,8 +416,7 @@ iSK_INI::parse (void)
     wchar_t* begin = nullptr;
     wchar_t* end   = nullptr;
 
-    wchar_t* wszDataCur  = &wszData [0];
-    wchar_t* wszDataNext = CharNextW (wszDataCur);
+    wchar_t* wszDataCur = &wszData [0];
 
     for (wchar_t* i = wszDataCur; i < wszDataEnd; i = CharNextW (i))
     {
@@ -464,8 +543,7 @@ iSK_INI::import (const wchar_t* import_data)
     wchar_t* begin = nullptr;
     wchar_t* end   = nullptr;
 
-    wchar_t* wszImportCur  = &wszImport [0];
-    wchar_t* wszImportNext = CharNextW (wszImportCur);
+    wchar_t* wszImportCur = &wszImport [0];
 
     for (wchar_t* i = wszImportCur; i < wszImportEnd; i = CharNextW (i))
     {
@@ -634,10 +712,13 @@ iSK_INI::get_section_f ( _In_z_ _Printf_format_string_
   return ret;
 }
 
+
 void
 __stdcall
 iSK_INI::write (const wchar_t* fname)
 {
+  SK_CreateDirectories (fname);
+
   FILE*   fOut = nullptr;
   errno_t ret  = 0;
 
@@ -662,6 +743,7 @@ iSK_INI::write (const wchar_t* fname)
   //fOut = _wfsopen (fname, L"wtc,ccs=UTF-16LE", _SH_DENYNO);
 
   if (ret != 0 || fOut == 0) {
+    MessageBoxW (nullptr, L"ERROR: Cannot open INI file for writing. Is it read-only?", fname, MB_OK | MB_ICONSTOP);
     return;
   }
 
