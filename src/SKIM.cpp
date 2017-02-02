@@ -1472,6 +1472,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
                      L"%s\\Version\\repository.ini",
                        wszInstallPath );
 
+        SKIM_DeleteConfigFiles (&product);
+
         DeleteFileW (wszRepoINI);
 
         CreateProcess ( wszExecutable,
@@ -1554,8 +1556,6 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
       (SK_FetchVersionInfo_pfn)
         GetProcAddress ( hModInstaller,
                         "SK_FetchVersionInfo" );
-
-    SKIM_DeleteConfigFiles (&product);
 
     if ( SK_FetchVersionInfo != nullptr &&
          SK_UpdateSoftware   != nullptr )

@@ -159,7 +159,7 @@ protected:
     }
 
     uint32_t getCount (void) {
-      return branches.size ();
+      return (uint32_t)branches.size ();
     }
 
     bool migrateToBranch (const wchar_t* wszName)
