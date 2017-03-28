@@ -94,6 +94,20 @@ struct sk_product_t {
 
 {
   {
+    L"dxgi.dll",
+    L"",
+    L"NieR: Automata™",
+    L"\"FAR\" (Fix Automata Res.)",
+    L"FAR",
+    L"H6SDVFMHZVUR6",
+    524220,
+    SK_64_BIT,
+    //SK_BOTH_BIT,
+    L"Fixes NieR: Automata™'s wonky resolution problems.",
+    0
+  },
+
+  {
     L"d3d9.dll",
     L"tbfix.dll",
     L"Tales of Berseria",
@@ -103,9 +117,9 @@ struct sk_product_t {
     429660,
     SK_64_BIT,
     //SK_BOTH_BIT,
-    L"Adds texture mod support, custom button icons (PS4 included), fixes "
-    L"Namco's framerate limiter, enhances shadow quality, improves performance, "
-    L"adds input remapping support.",
+    L"Adds texture mod support, custom button icons, improves "
+    L"Namco's framerate limiter, enhances shadow quality, "
+    L"adds anti-aliasing and input remapping support.",
     0
   },
 
@@ -119,7 +133,9 @@ struct sk_product_t {
     550350,
     SK_64_BIT,
     //SK_BOTH_BIT,
-    L"Fixes 7.1 Channel Audio Problems, improves framerate limiter",
+    L"Adds texture mod support, custom button icons, improves "
+    L"Namco's framerate limiter, enhances shadow quality, "
+    L"adds anti-aliasing and input remapping support.",
     0
   },
 
@@ -133,8 +149,8 @@ struct sk_product_t {
     351970,
     SK_32_BIT,
     //SK_BOTH_BIT,
-    L"Adds 60 FPS support, vastly improves graphics, adds aspect ratio "
-    L"correction and fixes multi-channel / high sample-rate audio stability.",
+    L"Adds 60 FPS support, enhances shadow quality, fixes texture aliasing,"
+    L" adds aspect ratio correction and fixes multi-channel / high sample-rate audio stability.",
     0
   },
 
@@ -170,8 +186,7 @@ struct sk_product_t {
     SK_64_BIT,
     //SK_BOTH_BIT,
 #ifdef _WIN64
-    L"Dramatically improves framepacing to eliminate seasickness while "
-    L"moving from point A to point B.\r\n\r\n"
+    L"Improves framepacing.\r\n\r\n"
     L"  (Use the Global Injector; Plug-In is built-in)",
 #else
     L"",
@@ -191,7 +206,7 @@ struct sk_product_t {
     //SK_BOTH_BIT,
     L"Improves framepacing, optimizes post-processing, removes the 720p "
     L"resolution lock, adds borderless window and MSAA, supports custom "
-    L"button icons; tends to be much more reliable than the game itself.",
+    L"button icons.",
     0
   },
 
@@ -1818,7 +1833,8 @@ SKIM_SummarizeRenderAPI (sk_product_t product)
     if (! _wcsicmp (product.wszRepoName, L"UnX"))
       ret += L"Direct3D 11";
     else if ( (! _wcsicmp (product.wszRepoName, L"FO4W")) ||
-              (! _wcsicmp (product.wszRepoName, L"SoulsUnsqueezed")) )
+              (! _wcsicmp (product.wszRepoName, L"SoulsUnsqueezed")) ||
+              (! _wcsicmp (product.wszRepoName, L"FAR")) )
       ret += L"Direct3D 11";
     else
       ret += L"Direct3D 10/11/12?";
