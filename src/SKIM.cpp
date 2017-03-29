@@ -1046,6 +1046,12 @@ SKIM_FetchInstaller64 ( sk_product_t product )
 
 
 
+bool
+SKIM_TestKB2533623 (SK_ARCHITECTURE arch)
+{
+  return GetProcAddress (GetModuleHandle (L"kernel32.dll"), "AddDllDirectory") != nullptr;
+}
+
 #include <Msi.h>
 #pragma comment (lib, "msi.lib")
 
@@ -1267,6 +1273,67 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
   // Disable installation of FO4W
   if ( product.uiSteamAppID == 377160 ) {
     CloseHandle (GetCurrentThread ());
+    return 0;
+  }
+
+  if (! SKIM_TestKB2533623 (SK_BOTH_BIT) )
+  {
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof (config);
+    config.hInstance          = g_hInstance;
+    config.hwndParent         = GetActiveWindow ();
+    config.pszWindowTitle     = L"Special K Install Manager (Fatal Error)";
+    config.dwCommonButtons    = 0;
+    config.pszMainInstruction = L"Missing KB2533623 Update for Windows 7";
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+
+    config.pfCallback         = 
+      []( _In_ HWND     hWnd,
+          _In_ UINT     uNotification,
+          _In_ WPARAM   wParam,
+          _In_ LPARAM   lParam,
+          _In_ LONG_PTR dwRefData ) ->
+      HRESULT
+      {
+        UNREFERENCED_PARAMETER (dwRefData);
+        UNREFERENCED_PARAMETER (wParam);
+
+        if (uNotification == TDN_HYPERLINK_CLICKED) {
+          ShellExecuteW ( hWnd,
+                            L"OPEN",
+                              (wchar_t *)lParam,
+                                nullptr, nullptr,
+                                  SW_SHOWMAXIMIZED );
+
+          TerminateProcess (GetCurrentProcess (), 0x00);
+          ExitProcess      (                      0x00);
+        }
+
+        return S_FALSE;
+      };
+
+    config.dwFlags           |= TDF_ENABLE_HYPERLINKS;
+
+    config.pszMainIcon        = TD_ERROR_ICON;
+
+#ifndef _WIN64
+    config.pszContent       = L"Please grab the x86"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=26767\">here</a>"
+                              L" to continue.";
+#else
+    config.pszContent       = L"Please grab the x64"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=267647\">here</a>"
+                              L" to continue.";
+#endif
+
+    TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
     return 0;
   }
 
@@ -1507,6 +1574,67 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
+  if (! SKIM_TestKB2533623 (SK_BOTH_BIT) )
+  {
+    int               nButtonPressed = 0;
+    TASKDIALOGCONFIG  config         = {0};
+
+    config.cbSize             = sizeof (config);
+    config.hInstance          = g_hInstance;
+    config.hwndParent         = GetActiveWindow ();
+    config.pszWindowTitle     = L"Special K Install Manager (Fatal Error)";
+    config.dwCommonButtons    = 0;
+    config.pszMainInstruction = L"Missing KB2533623 Update for Windows 7";
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+
+    config.pfCallback         = 
+      []( _In_ HWND     hWnd,
+          _In_ UINT     uNotification,
+          _In_ WPARAM   wParam,
+          _In_ LPARAM   lParam,
+          _In_ LONG_PTR dwRefData ) ->
+      HRESULT
+      {
+        UNREFERENCED_PARAMETER (dwRefData);
+        UNREFERENCED_PARAMETER (wParam);
+
+        if (uNotification == TDN_HYPERLINK_CLICKED) {
+          ShellExecuteW ( hWnd,
+                            L"OPEN",
+                              (wchar_t *)lParam,
+                                nullptr, nullptr,
+                                  SW_SHOWMAXIMIZED );
+
+          TerminateProcess (GetCurrentProcess (), 0x00);
+          ExitProcess      (                      0x00);
+        }
+
+        return S_FALSE;
+      };
+
+    config.dwFlags           |= TDF_ENABLE_HYPERLINKS;
+
+    config.pszMainIcon        = TD_ERROR_ICON;
+
+#ifndef _WIN64
+    config.pszContent       = L"Please grab the x86"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=26767\">here</a>"
+                              L" to continue.";
+#else
+    config.pszContent       = L"Please grab the x64"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=267647\">here</a>"
+                              L" to continue.";
+#endif
+
+    TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
+    return 0;
+  }
+
   if (! SKIM_TestVisualCRuntime (SK_BOTH_BIT) ) {//product.architecture)) {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -1549,28 +1677,18 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 
     config.pszMainIcon        = TD_ERROR_ICON;
 
-#if 0
-    if (product.architecture == SK_32_BIT) {
-      config.pszContent       = L"Please grab the x86"
-                                L" version from <a href=\""
-                                L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=53587\">here</a>"
-                                L" to continue.";
-    } else if (product.architecture == SK_64_BIT) {
-      config.pszContent       = L"Please grab the x64"
-                                L" version from <a href=\""
-                                L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=53587\">here</a>"
-                                L" to continue.";
-    } else {
-#endif
-      config.pszContent       = L"Please grab _BOTH_, the x86 and x64 "
-                                L"versions from <a href=\""
-                                L"https://www.microsoft.com/en-us/"
-                                L"download/details.aspx?id=53587\">here</a>"
-                                L" to continue.";
-#if 0
-    }
+#ifndef _WIN64
+    config.pszContent       = L"Please grab the x86"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=53587\">here</a>"
+                              L" to continue.";
+#else
+    config.pszContent       = L"Please grab the x64"
+                              L" version from <a href=\""
+                              L"https://www.microsoft.com/en-us/"
+                              L"download/details.aspx?id=53587\">here</a>"
+                              L" to continue.";
 #endif
 
     TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
