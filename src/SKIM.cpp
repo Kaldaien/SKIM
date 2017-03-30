@@ -1635,7 +1635,13 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  if (! SKIM_TestVisualCRuntime (SK_BOTH_BIT) ) {//product.architecture)) {
+  SK_ARCHITECTURE arch = SK_64_BIT;
+
+  if (product.architecture == SK_32_BIT)
+    arch = SK_BOTH_BIT;
+
+  if (! SKIM_TestVisualCRuntime (arch) )
+  {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
 
@@ -1677,19 +1683,32 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 
     config.pszMainIcon        = TD_ERROR_ICON;
 
-#ifndef _WIN64
-    config.pszContent       = L"Please grab the x86"
-                              L" version from <a href=\""
-                              L"https://www.microsoft.com/en-us/"
-                              L"download/details.aspx?id=53587\">here</a>"
-                              L" to continue.";
-#else
-    config.pszContent       = L"Please grab the x64"
-                              L" version from <a href=\""
-                              L"https://www.microsoft.com/en-us/"
-                              L"download/details.aspx?id=53587\">here</a>"
-                              L" to continue.";
-#endif
+    if (arch == SK_BOTH_BIT)
+    {
+      config.pszContent       = L"Please grab _BOTH_, the x86 and x64 "
+                                L"versions from <a href=\""
+                                L"https://www.microsoft.com/en-us/"
+                                L"download/details.aspx?id=53587\">here</a>"
+                                L" to continue.";
+    }
+
+    else if (arch == SK_32_BIT)
+    {
+      config.pszContent       = L"Please grab the x86"
+                                L" version from <a href=\""
+                                L"https://www.microsoft.com/en-us/"
+                                L"download/details.aspx?id=53587\">here</a>"
+                                L" to continue.";
+    }
+
+    else if (arch == SK_64_BIT)
+    {
+      config.pszContent       = L"Please grab the x64"
+                                L" version from <a href=\""
+                                L"https://www.microsoft.com/en-us/"
+                                L"download/details.aspx?id=53587\">here</a>"
+                                L" to continue.";
+    }
 
     TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
     return 0;
