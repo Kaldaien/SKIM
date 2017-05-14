@@ -1737,7 +1737,6 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
 
   if (SKIM_FetchInstallerDLL (product))
   {
-
     wchar_t wszInstallerDLL [MAX_PATH] = { L'\0' };
     swprintf ( wszInstallerDLL,
                 L"%s\\%s",
@@ -2116,6 +2115,10 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
     SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
   }
+
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnProductSelect          ();
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
 
   return 0;
 }
