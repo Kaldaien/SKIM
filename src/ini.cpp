@@ -147,6 +147,10 @@ iSK_INI::iSK_INI (const wchar_t* filename)
 
     // UTF16-BE  (Somehow we are swapped)
     else if (*wszData == 0xFFFE) {
+      //dll_log.Log ( L"[INI Parser] Encountered Byte-Swapped Unicode INI "
+                    //L"file ('%s'), attempting to recover...",
+                      //wszName );
+
       wchar_t* wszSwapMe = wszData;
 
       for (int i = 0; i < size; i += 2) {
@@ -186,6 +190,9 @@ iSK_INI::iSK_INI (const wchar_t* filename)
         MultiByteToWideChar ( CP_UTF8, 0, string, real_size, nullptr, 0 );
 
       if (! converted_size) {
+        //dll_log.Log ( L"[INI Parser] Could not convert UTF-8 / ANSI Encoded "
+                      //L".ini file ('%s') to UTF-16, aborting!",
+                        //wszName );
         wszData = nullptr;
 
         fclose (fINI);
@@ -196,6 +203,9 @@ iSK_INI::iSK_INI (const wchar_t* filename)
         new wchar_t [converted_size + 1];
 
       MultiByteToWideChar ( CP_UTF8, 0, string, real_size, wszData, converted_size );
+
+      //dll_log.Log ( L"[INI Parser] Converted UTF-8 INI File: '%s'",
+                      //wszName );
 
       wszData [converted_size] = L'\0';
 
@@ -217,7 +227,6 @@ iSK_INI::iSK_INI (const wchar_t* filename)
     fclose (fINI);
   }
   else {
-    //AD_MessageBox (L"Unable to Locate INI File", filename, MB_OK);
     delete [] wszName;
     wszName = nullptr;
     wszData = nullptr;
@@ -288,8 +297,6 @@ Process_Section (wchar_t* name, wchar_t* start, wchar_t* end)
           size_t   val_len = wcrlen          (value, l);
           wcsncpy (val_str, value, val_len);
 
-          //MessageBoxW (NULL, key_str, val_str, MB_OK);
-
           section.add_key_value (key_str, val_str);
 
           delete [] val_str;
@@ -330,7 +337,7 @@ Import_Section (iSK_INISection& section, wchar_t* start, wchar_t* end)
           ZeroMemory (val_str, sizeof (wchar_t) * (l - value + 1));
 
           size_t   val_len = wcrlen          (value, l);
-          wcsncpy (val_str, value, val_len);
+          wcsncat (val_str, value, val_len);
 
           // Prefer to change an existing value
           if (section.contains_key (key_str)) {
@@ -418,7 +425,7 @@ iSK_INI::parse (void)
 
     wchar_t* wszDataCur = &wszData [0];
 
-    for (wchar_t* i = wszDataCur; i < wszDataEnd; i = CharNextW (i))
+    for (wchar_t* i = wszDataCur; i < wszDataEnd && i != nullptr; i = CharNextW (i))
     {
       if (*i == L'[' && (i == wszData || *CharPrevW (&wszData [0], i) == L'\n')) {
         begin = CharNextW (i);
@@ -427,14 +434,12 @@ iSK_INI::parse (void)
       if (*i == L']' && (i == wszSecondToLast || *CharNextW (i) == L'\n'))
         end = i;
 
-      if (begin != nullptr && end != nullptr) {
+      if (begin != nullptr && end != nullptr && begin < end) {
            wchar_t* sec_name =    new wchar_t    [end - begin + 1];
         ZeroMemory (sec_name, sizeof (wchar_t) * (end - begin + 1));
 
         size_t   sec_len = wcrlen (begin, end);
         wcsncpy (sec_name,         begin, sec_len);
-
-        //MessageBoxW (NULL, sec_name, L"Section", MB_OK);
 
         wchar_t* start  = CharNextW (CharNextW (end));
         wchar_t* finish = start;
@@ -545,7 +550,7 @@ iSK_INI::import (const wchar_t* import_data)
 
     wchar_t* wszImportCur = &wszImport [0];
 
-    for (wchar_t* i = wszImportCur; i < wszImportEnd; i = CharNextW (i))
+    for (wchar_t* i = wszImportCur; i < wszImportEnd && i != nullptr; i = CharNextW (i))
     {
       if (*i == L'[' && (i == wszImport || *CharPrevW (&wszImport [0], i) == L'\n')) {
         begin = CharNextW (i);
@@ -722,9 +727,6 @@ iSK_INI::write (const wchar_t* fname)
   FILE*   fOut = nullptr;
   errno_t ret  = 0;
 
-  // Strip Read-Only
-  /////////AD_SetNormalFileAttribs (fname);
-
   switch (encoding_) {
     case INI_UTF8:
       TRY_FILE_IO (_wfsopen (fname, L"wtc,ccs=UTF-8", _SH_DENYNO), fname, fOut);
@@ -740,10 +742,9 @@ iSK_INI::write (const wchar_t* fname)
       TRY_FILE_IO (_wfsopen (fname, L"wtc,ccs=UTF-16LE", _SH_DENYNO), fname, fOut);
       break;
   }
-  //fOut = _wfsopen (fname, L"wtc,ccs=UTF-16LE", _SH_DENYNO);
 
   if (ret != 0 || fOut == 0) {
-    MessageBoxW (nullptr, L"ERROR: Cannot open INI file for writing. Is it read-only?", fname, MB_OK | MB_ICONSTOP);
+    //SK_MessageBox (L"ERROR: Cannot open INI file for writing. Is it read-only?", fname, MB_OK | MB_ICONSTOP);
     return;
   }
 
@@ -802,9 +803,6 @@ iSK_INI::write (const wchar_t* fname)
 
   fflush (fOut);
   fclose (fOut);
-
-  // Make Read-Only
-  ////SetFileAttributes (fname.c_str (), FILE_ATTRIBUTE_READONLY);
 }
 
 
