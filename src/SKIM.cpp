@@ -2,6 +2,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_NON_CONFORMING_WCSTOK
 #define _CRT_NON_CONFORMING_SWPRINTFS
+
 #pragma warning (disable: 4091)
 
 #include "stdafx.h"
@@ -41,11 +42,18 @@
                          " language='*'\"")
 #include <Richedit.h>
 
+#define GDIPVER 0x0110
+#include <gdiplus.h>
+#define NOMINMAX
+
 // {012BFDBD-790D-4A7B-9BC4-A2632D2569D9}
 static const GUID SKIM_SystemTray_UUID = 
 { 0x12bfdbd, 0x790d, 0x4a7b, { 0x9b, 0xc4, 0xa2, 0x63, 0x2d, 0x25, 0x69, 0xd9 } };
 
-HICON       hIconSKIM;
+HICON       hIconSKIM_LG;
+HICON       hIconSKIM_SM;
+HICON       hIconSKIM_Tray;
+
 HINSTANCE g_hInstance;
 
 bool child = false;
@@ -68,6 +76,9 @@ SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen);
 unsigned int
 __stdcall
 SKIM_FeatureUnsupportedMessage (LPVOID user);
+
+size_t
+SKIM_SummarizeInjectedPIDs (std::wstring& out);
 
 enum SK_ARCHITECTURE {
   SK_32_BIT   = 0x01,
@@ -340,27 +351,52 @@ SKIM_CreateDirectories ( const wchar_t* wszPath )
   return true;
 }
 
+void
+SKIM_StripTrailingSlashes (wchar_t* wszInOut)
+{
+  struct test_slashes
+  {
+    bool operator () (wchar_t a, wchar_t b) const
+    {
+      auto IsSlash = [](wchar_t a) -> bool {
+        return (a == L'\\' || a == L'/');
+      };
+
+      return IsSlash (a) && IsSlash (b);
+    }
+  };
+  
+  std::wstring wstr (wszInOut);
+  
+  wstr.erase ( std::unique ( wstr.begin (),
+                             wstr.end   (), test_slashes () ),
+                 wstr.end () );
+
+  wcscpy (wszInOut, wstr.c_str ());
+}
+
 const wchar_t*
 SKIM_FindInstallPath (uint32_t appid)
 {
   // DarkSouls 3's install path has additional baggage ;)
   bool ds3 = (appid == 374320);
 
-  wchar_t wszAppend [MAX_PATH] = { L'\0' };
+  wchar_t wszAppend [MAX_PATH] = { };
 
   if (ds3)
     lstrcatW (wszAppend, L"\\Game");
 
 
-  static wchar_t wszGamePath [MAX_PATH] = { L'\0' };
+  static wchar_t wszGamePath [MAX_PATH] = { };
 
   // Special Case: AppID 0 = Special K
-  if (appid == 0) {
+  if (appid == 0)
+  {
     uint32_t dwLen = MAX_PATH;
 
     SKIM_GetDocumentsDir (wszGamePath, &dwLen);
 
-    lstrcatW (wszGamePath, L"\\My Mods\\SpecialK\\");
+    PathAppend (wszGamePath, L"My Mods\\SpecialK\\");
 
     return wszGamePath;
   }
@@ -371,7 +407,7 @@ SKIM_FindInstallPath (uint32_t appid)
 
 #define MAX_STEAM_LIBRARIES 16
   static int             steam_libs = 0;
-  static steam_library_t steam_lib_paths [MAX_STEAM_LIBRARIES] = { 0 };
+  static steam_library_t steam_lib_paths [MAX_STEAM_LIBRARIES] = { };
 
   static const wchar_t* wszSteamPath;
 
@@ -380,10 +416,10 @@ SKIM_FindInstallPath (uint32_t appid)
       SKIM_GetSteamDir ();
 
       if (wszSteamPath != nullptr) {
-        wchar_t wszLibraryFolders [MAX_PATH];
+        wchar_t wszLibraryFolders [MAX_PATH] = { };
 
-        lstrcpyW (wszLibraryFolders, wszSteamPath);
-        lstrcatW (wszLibraryFolders, L"\\steamapps\\libraryfolders.vdf");
+        lstrcpyW   (wszLibraryFolders, wszSteamPath);
+        PathAppend (wszLibraryFolders, L"steamapps\\libraryfolders.vdf");
 
       if (GetFileAttributesW (wszLibraryFolders) != INVALID_FILE_ATTRIBUTES) {
         HANDLE hLibFolders =
@@ -400,7 +436,6 @@ SKIM_FindInstallPath (uint32_t appid)
                  dwSizeHigh,
                  dwRead;
 
-          // This isn't a 4+ GiB file... so who the heck cares about the high-bits?
           dwSize = GetFileSize (hLibFolders, &dwSizeHigh);
 
           void* data =
@@ -454,14 +489,15 @@ SKIM_FindInstallPath (uint32_t appid)
   // Search custom library paths first
   if (steam_libs != 0) {
     for (int i = 0; i < steam_libs; i++) {
-      char szManifest [MAX_PATH] = { '\0' };
+      char szManifest [MAX_PATH] = { };
 
       sprintf ( szManifest,
                   "%s\\steamapps\\appmanifest_%d.acf",
                     (char *)steam_lib_paths [i],
                       appid );
 
-      if (GetFileAttributesA (szManifest) != INVALID_FILE_ATTRIBUTES) {
+      if (GetFileAttributesA (szManifest) != INVALID_FILE_ATTRIBUTES)
+      {
         HANDLE hManifest =
           CreateFileA ( szManifest,
                         GENERIC_READ,
@@ -499,7 +535,7 @@ SKIM_FindInstallPath (uint32_t appid)
           char* szInstallDir =
             StrStrIA (szManifestData, "\"installdir\"");
 
-          char szGamePath [MAX_PATH] = { '\0' };
+          char szGamePath [MAX_PATH] = { };
 
           if (szInstallDir != nullptr) {
             // Make sure everything is lowercase
@@ -515,7 +551,10 @@ SKIM_FindInstallPath (uint32_t appid)
                          (char *)steam_lib_paths [i],
                            szGamePath, wszAppend );
 
-          if (GetFileAttributesW (wszGamePath) & FILE_ATTRIBUTE_DIRECTORY) {
+          SKIM_StripTrailingSlashes (wszGamePath);
+
+          if (GetFileAttributesW (wszGamePath) & FILE_ATTRIBUTE_DIRECTORY)
+          {
             delete [] szManifestData;
             return wszGamePath;
           }
@@ -526,10 +565,10 @@ SKIM_FindInstallPath (uint32_t appid)
     }
   }
 
-  char szManifest [MAX_PATH] = { '\0' };
+  char szManifest [MAX_PATH] = { };
 
   sprintf ( szManifest,
-              "%ls\\steamapps\\appmanifest_%d.acf",
+              "%ws\\steamapps\\appmanifest_%d.acf",
                 wszSteamPath,
                   appid );
 
@@ -543,7 +582,8 @@ SKIM_FindInstallPath (uint32_t appid)
                             GetFileAttributesA (szManifest),
                               nullptr );
 
-    if (hManifest != INVALID_HANDLE_VALUE) {
+    if (hManifest != INVALID_HANDLE_VALUE)
+    {
       DWORD  dwSize,
              dwSizeHigh,
              dwRead;
@@ -576,7 +616,7 @@ SKIM_FindInstallPath (uint32_t appid)
       char* szInstallDir =
         StrStrIA (szManifestData, "\"installdir\"");
 
-      char szGamePath [MAX_PATH] = { '\0' };
+      char szGamePath [MAX_PATH] = { };
 
       if (szInstallDir != nullptr) {
         // Make sure everything is lowercase
@@ -588,11 +628,14 @@ SKIM_FindInstallPath (uint32_t appid)
       }
 
       swprintf ( wszGamePath,
-                   L"%ls\\steamapps\\common\\%hs%s",
+                   L"%ws\\steamapps\\common\\%hs%s",
                      wszSteamPath,
                        szGamePath, wszAppend );
 
-      if (GetFileAttributesW (wszGamePath) & FILE_ATTRIBUTE_DIRECTORY) {
+      SKIM_StripTrailingSlashes (wszGamePath);
+
+      if (GetFileAttributesW (wszGamePath) & FILE_ATTRIBUTE_DIRECTORY)
+      {
         delete [] szManifestData;
         return wszGamePath;
       }
@@ -615,8 +658,8 @@ SKIM_IsDLLFromProduct (const wchar_t* wszName, const wchar_t* wszProductName)
   UINT     cbTranslatedBytes = 0,
            cbProductBytes    = 0;
 
-  uint8_t  cbData      [4096] = {     0 };
-  wchar_t  wszPropName [64]   = { L'\0' };
+  uint8_t  cbData      [4096] = { };
+  wchar_t  wszPropName [64]   = { };
 
   wchar_t* wszProduct = nullptr; // Will point somewhere in cbData
 
@@ -625,7 +668,7 @@ SKIM_IsDLLFromProduct (const wchar_t* wszName, const wchar_t* wszProductName)
     WORD wCodePage;
   } *lpTranslate = nullptr;
 
-  wchar_t wszFullyQualifiedName [MAX_PATH * 2] = { L'\0' };
+  wchar_t wszFullyQualifiedName [MAX_PATH * 2] = { };
 
   lstrcatW (wszFullyQualifiedName, wszName);
 
@@ -797,6 +840,9 @@ SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
   return false;
 }
 
+//
+// XXX: DEPRECATED - Does nothing, re-write any code that uses this
+//
 void
 SKIM_EnableAppInitDLLs (bool enable)
 {
@@ -852,7 +898,7 @@ UNREFERENCED_PARAMETER (product);
     return false;
   }
 
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { L'\0' };
+  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
 
   wsprintf ( wszRemoteRepoURL,
 // REMOVE 5/13/17 to deal with GitHub nonsense -- //L"/Kaldaien/SpecialK/master/%s",
@@ -991,7 +1037,7 @@ L"installer64.dll"
     return false;
   }
 
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { L'\0' };
+  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
 
   wsprintf ( wszRemoteRepoURL,
                L"/Kaldaien/FAR/master/%s",
@@ -1144,7 +1190,7 @@ L"injector64.dll"
     return false;
   }
 
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { L'\0' };
+  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
 
   wsprintf ( wszRemoteRepoURL,
                L"/Kaldaien/SpecialK/%s",
@@ -1259,9 +1305,7 @@ SKIM_FetchInstaller64 ( sk_product_t product )
 }
 
 
-//
-// XXX: Not implemented yet
-//
+
 bool
 __stdcall
 SKIM_FetchInjector32 ( sk_product_t product )
@@ -1291,7 +1335,8 @@ SKIM_TestKB2533623 (SK_ARCHITECTURE arch)
 bool
 SKIM_TestVisualCRuntime (SK_ARCHITECTURE arch)
 {
-  if (arch == SK_64_BIT) {
+  if (arch == SK_64_BIT)
+  {
     const wchar_t* vcredist2015_upgradecode_x64 =
       L"{36F68A90-239C-34DF-B58C-64B30153CE35}";
 
@@ -1311,7 +1356,8 @@ SKIM_TestVisualCRuntime (SK_ARCHITECTURE arch)
     return false;
   }
 
-  else if (arch == SK_32_BIT) {
+  else if (arch == SK_32_BIT)
+  {
     const wchar_t* vcredist2015_upgradecode =
       L"{65E5BD06-6392-3027-8C26-853107D3CF1A}";
 
@@ -1359,14 +1405,14 @@ SKIM_DeleteConfigFiles (sk_product_t* product)
 
   *wcsrchr (wszWrapper, L'.') = L'\0';
 
-  wchar_t wszWrapperINI [MAX_PATH] = { L'\0' };
+  wchar_t wszWrapperINI [MAX_PATH] = { };
   wcscat (wszWrapperINI, wszInstallPath);
   wcscat (wszWrapperINI, wszWrapper);
   wcscat (wszWrapperINI, L".ini");
 
   DeleteFileW (wszWrapperINI);
 
-  wchar_t wszPlugInINI [MAX_PATH] = { L'\0' };
+  wchar_t wszPlugInINI [MAX_PATH] = { };
 
   if (has_plugin) {
     *wcsrchr (wszPlugIn,  L'.') = L'\0';
@@ -1453,7 +1499,7 @@ SKIM_UninstallProduct (LPVOID user)
   wsprintf ( wszUninstall, L"%s has been successfully uninstalled.",
                product->wszProjectName );
 
-#if 1
+
   MessageBox ( 0,
                  wszUninstall,
                    L"Uninstall Success",
@@ -1462,10 +1508,12 @@ SKIM_UninstallProduct (LPVOID user)
   ShowWindow          (parent_dlg, SW_SHOW);
   SetForegroundWindow (parent_dlg);
   SendMessage         (parent_dlg, WM_INITDIALOG, 0x00, 0x00);
-#else
-  TerminateProcess (GetCurrentProcess (), 0x00);
-  ExitProcess      (                      0x00);
-#endif
+
+  if (child)
+  {
+    TerminateProcess (GetCurrentProcess (), 0x00);
+    ExitProcess      (                      0x00);
+  }
 
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
   SKIM_OnProductSelect ();
@@ -1534,7 +1582,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
         UNREFERENCED_PARAMETER (dwRefData);
         UNREFERENCED_PARAMETER (wParam);
 
-        if (uNotification == TDN_HYPERLINK_CLICKED) {
+        if (uNotification == TDN_HYPERLINK_CLICKED)
+        {
           ShellExecuteW ( hWnd,
                             L"OPEN",
                               (wchar_t *)lParam,
@@ -1570,7 +1619,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  if (! SKIM_TestVisualCRuntime (SK_BOTH_BIT) ) {
+  if (! SKIM_TestVisualCRuntime (SK_BOTH_BIT) )
+  {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
 
@@ -1594,7 +1644,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
         UNREFERENCED_PARAMETER (dwRefData);
         UNREFERENCED_PARAMETER (wParam);
 
-        if (uNotification == TDN_HYPERLINK_CLICKED) {
+        if (uNotification == TDN_HYPERLINK_CLICKED)
+        {
           ShellExecuteW ( hWnd,
                             L"OPEN",
                               (wchar_t *)lParam,
@@ -1641,31 +1692,31 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  wchar_t wszInstallPath [MAX_PATH] = { L'\0' };
+  wchar_t wszInstallPath [MAX_PATH] = { };
 
   wcscpy ( wszInstallPath,
             SKIM_FindInstallPath (product.uiSteamAppID) );
 
-  wchar_t wszAppID      [16]       = { L'\0' };
-  wchar_t wszExecutable [MAX_PATH] = { L'\0' };
+  wchar_t wszAppID      [MAX_PATH * 2] = { };
+  wchar_t wszExecutable [MAX_PATH    ] = { };
 
   GetModuleFileName (GetModuleHandle (nullptr), wszExecutable, MAX_PATH);
 
-  swprintf (wszAppID, L"%lu", product.uiSteamAppID);
+  swprintf (wszAppID, L"\"%ws\" %lu", wszExecutable, product.uiSteamAppID);
 
   if ( product.uiSteamAppID != 0 )
   {
     if ( GetFileAttributes (L"steam_api.dll")   == INVALID_FILE_ATTRIBUTES &&
          GetFileAttributes (L"steam_api64.dll") == INVALID_FILE_ATTRIBUTES )
     {
-      wchar_t wszDeployedSteamAPI   [MAX_PATH] = { L'\0' };
-      wchar_t wszDeployedSteamAPI64 [MAX_PATH] = { L'\0' };
+      wchar_t wszDeployedSteamAPI   [MAX_PATH] = { };
+      wchar_t wszDeployedSteamAPI64 [MAX_PATH] = { };
 
-      lstrcatW (wszDeployedSteamAPI,   wszInstallPath);
-      lstrcatW (wszDeployedSteamAPI, L"\\steam_api.dll");
+      lstrcatW   (wszDeployedSteamAPI, wszInstallPath);
+      PathAppend (wszDeployedSteamAPI, L"steam_api.dll");
 
-      lstrcatW (wszDeployedSteamAPI64, wszInstallPath);
-      lstrcatW (wszDeployedSteamAPI64, L"\\steam_api64.dll");
+      lstrcatW   (wszDeployedSteamAPI64, wszInstallPath);
+      PathAppend (wszDeployedSteamAPI64, L"steam_api64.dll");
 
       extern HWND hWndMainDlg;
 
@@ -1679,7 +1730,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
         sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
         sinfo.wShowWindow = SW_HIDE;
 
-        wchar_t wszRepoINI    [MAX_PATH] = { L'\0' };
+        wchar_t wszRepoINI    [MAX_PATH] = { };
 
         wsprintf ( wszRepoINI,
                      L"%s\\Version\\repository.ini",
@@ -1696,27 +1747,36 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
                                 nullptr, wszInstallPath,
                                   &sinfo, &pinfo );
 
-        if (hWndMainDlg != 0) {
+        if (hWndMainDlg != 0)
+        {
           ShowWindow (hWndMainDlg, SW_HIDE);
         }
 
-        if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0) {
+        if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0)
+        {
           CloseHandle (pinfo.hThread);
           CloseHandle (pinfo.hProcess);
         }
 
-        if (! child) {
+        if (! child)
+        {
           ShowWindow          (hWndMainDlg, SW_SHOW);
           SetForegroundWindow (hWndMainDlg);
           SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
-        } else {
+        }
+
+        else
+        {
           SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
           SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
         }
 
         return 1;
-      } else {
-        wchar_t wszErrorMsg [512] = { L'\0' };
+      }
+
+      else
+      {
+        wchar_t wszErrorMsg [512] = { };
 
         _swprintf ( wszErrorMsg,
                       L"Unable to locate a valid install path (steam_api{64}.dll is missing)!\r\n\r\n"
@@ -1740,7 +1800,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
 
   if (SKIM_FetchInstallerDLL (product))
   {
-    wchar_t wszInstallerDLL [MAX_PATH] = { L'\0' };
+    wchar_t wszInstallerDLL [MAX_PATH] = { };
     swprintf ( wszInstallerDLL,
                 L"%s\\%s",
                   wszInstallPath, product.wszWrapper );
@@ -1748,8 +1808,9 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
     HMODULE hModInstaller =
       LoadLibrary (wszInstallerDLL);
 
-    if (hModInstaller != nullptr) {
-      wchar_t wszRepoINI      [MAX_PATH] = { L'\0' };
+    if (hModInstaller != nullptr)
+    {
+      wchar_t wszRepoINI      [MAX_PATH] = { };
 
       wsprintf ( wszRepoINI,
                    L"%s\\Version\\repository.ini",
@@ -1780,11 +1841,15 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
       FreeLibrary (hModInstaller);
     }
 
-    if (! child) {
+    if (! child)
+    {
       ShowWindow          (hWndMainDlg, SW_SHOW);
       SetForegroundWindow (hWndMainDlg);
       SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
-    } else {
+    }
+
+    else
+    {
       
       SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
       SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
@@ -1907,7 +1972,8 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
         UNREFERENCED_PARAMETER (dwRefData);
         UNREFERENCED_PARAMETER (wParam);
 
-        if (uNotification == TDN_HYPERLINK_CLICKED) {
+        if (uNotification == TDN_HYPERLINK_CLICKED)
+        {
           ShellExecuteW ( hWnd,
                             L"OPEN",
                               (wchar_t *)lParam,
@@ -1957,31 +2023,31 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  wchar_t wszInstallPath [MAX_PATH] = { L'\0' };
+  wchar_t wszInstallPath [MAX_PATH] = { };
 
   wcscpy ( wszInstallPath,
             SKIM_FindInstallPath (product.uiSteamAppID) );
 
-  wchar_t wszAppID      [16]       = { L'\0' };
-  wchar_t wszExecutable [MAX_PATH] = { L'\0' };
+  wchar_t wszAppID      [MAX_PATH * 2] = { };
+  wchar_t wszExecutable [MAX_PATH    ] = { };
 
   GetModuleFileName (GetModuleHandle (nullptr), wszExecutable, MAX_PATH);
 
-  swprintf (wszAppID, L"%lu", product.uiSteamAppID);
+  swprintf (wszAppID, L"\"%ws\" %lu", wszExecutable, product.uiSteamAppID);
 
   if ( product.uiSteamAppID != 0 )
   {
     if ( GetFileAttributes (L"steam_api.dll")   == INVALID_FILE_ATTRIBUTES &&
          GetFileAttributes (L"steam_api64.dll") == INVALID_FILE_ATTRIBUTES )
     {
-      wchar_t wszDeployedSteamAPI   [MAX_PATH] = { L'\0' };
-      wchar_t wszDeployedSteamAPI64 [MAX_PATH] = { L'\0' };
+      wchar_t wszDeployedSteamAPI   [MAX_PATH] = { };
+      wchar_t wszDeployedSteamAPI64 [MAX_PATH] = { };
 
-      lstrcatW (wszDeployedSteamAPI,   wszInstallPath);
-      lstrcatW (wszDeployedSteamAPI, L"\\steam_api.dll");
+      lstrcatW   (wszDeployedSteamAPI,   wszInstallPath);
+      PathAppend (wszDeployedSteamAPI, L"steam_api.dll");
 
-      lstrcatW (wszDeployedSteamAPI64, wszInstallPath);
-      lstrcatW (wszDeployedSteamAPI64, L"\\steam_api64.dll");
+      lstrcatW   (wszDeployedSteamAPI64,     wszInstallPath);
+      PathAppend (wszDeployedSteamAPI64, L"steam_api64.dll");
 
       extern HWND hWndMainDlg;
 
@@ -1995,7 +2061,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
         sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
         sinfo.wShowWindow = SW_HIDE;
 
-        wchar_t wszInstallerINI [MAX_PATH] = { L'\0' };
+        wchar_t wszInstallerINI [MAX_PATH] = { };
 
         wsprintf ( wszInstallerINI,
                      L"%s\\Version\\installed.ini",
@@ -2003,7 +2069,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 
         DeleteFileW (wszInstallerINI);
   
-        wchar_t wszRepoINI    [MAX_PATH] = { L'\0' };
+        wchar_t wszRepoINI    [MAX_PATH] = { };
 
         wsprintf ( wszRepoINI,
                      L"%s\\Version\\repository.ini",
@@ -2044,8 +2110,11 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
         SKIM_OnBranchSelect           ();
 
         return 1;
-      } else {
-        wchar_t wszErrorMsg [512] = { L'\0' };
+      }
+
+      else
+      {
+        wchar_t wszErrorMsg [512] = { };
 
         _swprintf ( wszErrorMsg,
                       L"Unable to locate a valid install path (steam_api{64}.dll is missing)!\r\n\r\n"
@@ -2070,7 +2139,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   bool bValidInstaller = 
     SKIM_FetchInstallerDLL (product);
 
-  wchar_t wszInstallerDLL [MAX_PATH] = { L'\0' };
+  wchar_t wszInstallerDLL [MAX_PATH] = { };
   swprintf ( wszInstallerDLL,
               L"%s\\%s",
                 wszInstallPath, product.wszWrapper );
@@ -2079,7 +2148,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     bValidInstaller ? LoadLibrary (wszInstallerDLL) : 0;
 
 
-  wchar_t wszRepoINI      [MAX_PATH] = { L'\0' };
+  wchar_t wszRepoINI      [MAX_PATH] = { };
 
   wsprintf ( wszRepoINI,
                L"%s\\Version\\repository.ini",
@@ -2113,14 +2182,21 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   }
 
   else
+  {
+    DeleteFileW (wszInstallerDLL);
     MessageBoxW (NULL, L"Something went wrong attempting to download Installer DLL.", L"Install Failed", MB_OK | MB_ICONERROR);
+  }
 
 
-  if (! child) {
+  if (! child)
+  {
     ShowWindow          (hWndMainDlg, SW_SHOW);
     SetForegroundWindow (hWndMainDlg);
     SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
-  } else {
+  }
+
+  else
+  {
     SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
     SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
   }
@@ -2150,13 +2226,12 @@ SKIM_DetermineInstallState (sk_product_t& product)
 #endif
   {
              uint32_t dwLen = MAX_PATH;
-    wchar_t wszSpecialK_ROOT [MAX_PATH] = { L'\0' };
+    wchar_t wszSpecialK_ROOT [MAX_PATH] = { };
 
     SKIM_GetDocumentsDir (wszSpecialK_ROOT, &dwLen);
 
-    lstrcatW (wszSpecialK_ROOT, L"\\My Mods\\SpecialK\\");
-
-    lstrcatW (wszSpecialK_ROOT, product.wszWrapper);
+    PathAppend (wszSpecialK_ROOT, L"My Mods\\SpecialK");
+    PathAppend (wszSpecialK_ROOT, product.wszWrapper);
 
     if (GetFileAttributes (wszSpecialK_ROOT) != INVALID_FILE_ATTRIBUTES)
     {
@@ -2172,24 +2247,29 @@ SKIM_DetermineInstallState (sk_product_t& product)
     }
   }
 
-  wchar_t wszFileToTest [MAX_PATH] = { L'\0' };
+  wchar_t wszFileToTest [MAX_PATH] = { };
 
-  if (lstrlenW (product.wszPlugIn)) {
+  if (lstrlenW (product.wszPlugIn))
+  {
     swprintf ( wszFileToTest,
                  L"%s\\%s",
                    SKIM_FindInstallPath (product.uiSteamAppID),
                      product.wszPlugIn );
-  } else {
-      swprintf ( wszFileToTest,
-               L"%s\\%s",
-                 SKIM_FindInstallPath (product.uiSteamAppID),
-                   product.wszWrapper );
+  }
+
+  else
+  {
+    swprintf ( wszFileToTest,
+             L"%s\\%s",
+               SKIM_FindInstallPath (product.uiSteamAppID),
+                 product.wszWrapper );
   }
 
   const wchar_t* wszInstallPath =
     SKIM_FindInstallPath (product.uiSteamAppID);
 
-  if (wszInstallPath == nullptr || *wszInstallPath == *L"") {
+  if (wszInstallPath == nullptr || *wszInstallPath == *L"")
+  {
     product.install_state = -1;
     return false;
   }
@@ -2198,7 +2278,8 @@ SKIM_DetermineInstallState (sk_product_t& product)
              SKIM_FindInstallPath (product.uiSteamAppID)
            ) & FILE_ATTRIBUTE_DIRECTORY
          )
-     ) {
+     )
+  {
     product.install_state = -1;
     return false;
   }
@@ -2310,15 +2391,18 @@ SKIM_OnBranchSelect (void)
   int  installed_idx = user_idx;
   bool empty         = ComboBox_GetCount  (hWndBranchSelect) == 0;
 
-  if (empty) {
+  if (empty)
+  {
     user_idx      = 0;
     installed_idx = 0;
   }
 
-  if (count > 1) {
+  if (count > 1)
+  {
     SKIM_BranchManager::Branch* pBranch = nullptr;
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++)
+    {
       pBranch = SKIM_GetProductBranchByIdx ( &products [sel], i );
 
       if (! pBranch)
@@ -2327,7 +2411,8 @@ SKIM_OnBranchSelect (void)
       if (pBranch->name == SKIM_BranchManager::singleton ()->getCurrentBranch ()->name)
         installed_idx = i;
 
-      if (empty) {
+      if (empty)
+      {
         ComboBox_InsertString ( hWndBranchSelect,
                                   i,
                                     pBranch->name.c_str ()
@@ -2365,7 +2450,8 @@ SKIM_OnBranchSelect (void)
     EnableWindow (hWndBrachMigrate, FALSE);
   }
 
-  if ((! SKIM_DetermineInstallState (products [sel])) || count < 1) {
+  if ((! SKIM_DetermineInstallState (products [sel])) || count < 1)
+  {
     SendMessage  ( hWndStatusBar,
                     SB_SETTEXT,
                       LOBYTE (0) | HIBYTE (0),
@@ -2374,7 +2460,8 @@ SKIM_OnBranchSelect (void)
     EnableWindow (hWndBrachMigrate, FALSE);
   }
 
-  else {
+  else
+  {
     wchar_t wszStatus [256];
     swprintf ( wszStatus,
                  L"\t%s        (%s)",
@@ -2405,9 +2492,7 @@ SKIM_GetInjectorState (void)
   HMODULE hMod = LoadLibrary (L"SpecialK32.dll");
 #endif
 
-  typedef void (WINAPI *SKX_InstallCBTHook_pfn)(void);
-  typedef void (WINAPI *SKX_RemoveCBTHook_pfn)(void);
-  typedef bool (WINAPI *SKX_IsHookingCBT_pfn)(void);
+  typedef bool   (WINAPI *SKX_IsHookingCBT_pfn)   (void);
   
   if (hMod != NULL)
   {
@@ -2464,26 +2549,12 @@ SKIM_OnProductSelect (void)
   // Easy way to detect Special K
   if (products [sel].uiSteamAppID == 0)
   {
-    //static HICON hIconShield = 0;
-    //
-    //if (hIconShield == 0) {
-    //  SHSTOCKICONINFO sii = { 0 };
-    //           sii.cbSize = sizeof (sii);
-    //
-    //  SHGetStockIconInfo ( SIID_SHIELD,
-    //                         SHGSI_ICON | SHGSI_LARGEICON,
-    //                           &sii );
-    //
-    //  hIconShield  = sii.hIcon;
-    //}
-
-    //btn_icon = hIconShield;
-
     SetWindowTextA ( hWndManage, SKIM_GetInjectorState () ? "Stop Injecting" : "Start Injecting" );
   }
 
   else
     SetWindowTextA ( hWndManage, "Manage/Repair" );
+
 
   HWND hWndInstall =
     GetDlgItem (hWndMainDlg, IDC_INSTALL_CMD);
@@ -2491,31 +2562,25 @@ SKIM_OnProductSelect (void)
   HWND hWndUninstall =
     GetDlgItem (hWndMainDlg, IDC_UNINSTALL_CMD);
 
-  //SendMessage ( hWndInstall,
-  //                BM_SETIMAGE,
-  //                  IMAGE_ICON,
-  //                    (LPARAM)btn_icon
-  //            );
-  //
-  //SendMessage ( hWndUninstall,
-  //                BM_SETIMAGE,
-  //                  IMAGE_ICON,
-  //                    (LPARAM)btn_icon
-  //            );
 
-  if (products [sel].install_state < 0) {
+  if (products [sel].install_state < 0)
+  {
     Button_Enable (hWndInstall,   0);
     Button_Enable (hWndManage,    0);
     Button_Enable (hWndUninstall, 0);
   }
 
-  else if (products [sel].install_state == 0) {
+
+  else if (products [sel].install_state == 0)
+  {
     Button_Enable (hWndInstall,   1);
     Button_Enable (hWndManage,    0);
     Button_Enable (hWndUninstall, 0);
   }
 
-  else if (products [sel].install_state == 1) {
+
+  else if (products [sel].install_state == 1)
+  {
     Button_Enable (hWndInstall,   0);
     Button_Enable (hWndUninstall, 1);
 
@@ -2545,13 +2610,15 @@ SKIM_OnProductSelect (void)
 
 HMODULE hModGlobal = 0;//LoadLibrary (L"SpecialK64.dll");
 
-typedef void (WINAPI *SKX_InstallCBTHook_pfn) (void);
-typedef void (WINAPI *SKX_RemoveCBTHook_pfn)  (void);
-typedef bool (WINAPI *SKX_IsHookingCBT_pfn)   (void);
+typedef void   (WINAPI *SKX_InstallCBTHook_pfn)  (void);
+typedef void   (WINAPI *SKX_RemoveCBTHook_pfn)   (void);
+typedef bool   (WINAPI *SKX_IsHookingCBT_pfn)    (void);
+typedef size_t (WINAPI *SKX_GetInjectedPIDs_pfn) (DWORD*, size_t);
 
-SKX_RemoveCBTHook_pfn  SKX_RemoveCBTHook  = nullptr;
-SKX_InstallCBTHook_pfn SKX_InstallCBTHook = nullptr;
-SKX_IsHookingCBT_pfn   SKX_IsHookingCBT   = nullptr;
+SKX_RemoveCBTHook_pfn   SKX_RemoveCBTHook   = nullptr;
+SKX_InstallCBTHook_pfn  SKX_InstallCBTHook  = nullptr;
+SKX_IsHookingCBT_pfn    SKX_IsHookingCBT    = nullptr;
+SKX_GetInjectedPIDs_pfn SKX_GetInjectedPIDs = nullptr;
 
 static NOTIFYICONDATAW sys_tray_icon = { };
 
@@ -2565,14 +2632,17 @@ SKIM_GlobalInject_Load (void)
 
   if (hModGlobal != 0)
   {
-    SKX_RemoveCBTHook  = (SKX_RemoveCBTHook_pfn)
-      GetProcAddress     (hModGlobal, "SKX_RemoveCBTHook");
+    SKX_RemoveCBTHook   = (SKX_RemoveCBTHook_pfn)
+      GetProcAddress      (hModGlobal, "SKX_RemoveCBTHook");
 
-    SKX_InstallCBTHook = (SKX_InstallCBTHook_pfn)
-      GetProcAddress     (hModGlobal, "SKX_InstallCBTHook");
+    SKX_InstallCBTHook  = (SKX_InstallCBTHook_pfn)
+      GetProcAddress      (hModGlobal, "SKX_InstallCBTHook");
 
-    SKX_IsHookingCBT   = (SKX_IsHookingCBT_pfn)
-      GetProcAddress     (hModGlobal, "SKX_IsHookingCBT");
+    SKX_IsHookingCBT    = (SKX_IsHookingCBT_pfn)
+      GetProcAddress      (hModGlobal, "SKX_IsHookingCBT");
+
+    SKX_GetInjectedPIDs = (SKX_GetInjectedPIDs_pfn)
+      GetProcAddress      (hModGlobal, "SKX_GetInjectedPIDs");
   }
 
   return hModGlobal;
@@ -2589,9 +2659,10 @@ SKIM_GlobalInject_Free (void)
 
   if (hModGlobal == 0)
   {
-    SKX_RemoveCBTHook  = nullptr;
-    SKX_InstallCBTHook = nullptr;
-    SKX_IsHookingCBT   = nullptr;
+    SKX_RemoveCBTHook   = nullptr;
+    SKX_InstallCBTHook  = nullptr;
+    SKX_IsHookingCBT    = nullptr;
+    SKX_GetInjectedPIDs = nullptr;
   }
 
   if (hModGlobal == 0)
@@ -2610,53 +2681,81 @@ SKIM_GlobalInject_Start (void)
 {
   if (SKIM_GlobalInject_Load ())
   {
-    char szRunDLL32 [ MAX_PATH * 2 + 1 ] = { '\0' };
-    GetSystemWow64DirectoryA (szRunDLL32, MAX_PATH);
-    lstrcatA                 (szRunDLL32, "\\rundll32.exe");
-  
     if (! SKX_IsHookingCBT ())
     {
       SKX_InstallCBTHook ();
   
-      ShellExecuteA ( NULL, "open", szRunDLL32, "SpecialK32.dll,RunDLL_InjectionManager Install", nullptr, SW_HIDE );
+      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
+        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Install", nullptr, SW_HIDE );
 
-      return true;
+      if (SKX_IsHookingCBT ())
+        return true;
     }
 
     else
-      return true;
+      return false;
   }
 
   return false;
 }
 
 bool
-SKIM_GlobalInject_Stop (void)
+SKIM_GlobalInject_Stop (bool confirm = true)
 {
   if (SKIM_GlobalInject_Load ())
   {
-    char szRunDLL32 [ MAX_PATH * 2 + 1 ] = { '\0' };
-    GetSystemWow64DirectoryA (szRunDLL32, MAX_PATH);
-    lstrcatA                 (szRunDLL32, "\\rundll32.exe");
-  
     if (SKX_IsHookingCBT ())
     {
+      std::wstring confirmation = L"";
+
+      if (confirm && SKIM_SummarizeInjectedPIDs (confirmation))
+      {
+        int               nButtonPressed =   0;
+        TASKDIALOGCONFIG  config         = { 0 };
+
+        config.cbSize             = sizeof (config);
+        config.hInstance          = g_hInstance;
+        config.hwndParent         = GetActiveWindow ();
+        config.pszWindowTitle     = L"Special K Install Manager";
+        config.dwCommonButtons    = TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
+        config.pszMainInstruction = L"Software May Crash if Injection Stops";
+        config.pButtons           = nullptr;
+        config.cButtons           = 0;
+        config.nDefaultButton     = IDCANCEL;
+
+        config.dwFlags            = TDF_SIZE_TO_CONTENT;
+        config.pszMainIcon        = TD_WARNING_ICON;
+
+        config.pszContent         = confirmation.c_str ();
+
+        TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
+
+        if ( nButtonPressed == IDCANCEL )
+        {
+          return false;
+        }
+      }
+
       SKX_RemoveCBTHook ();
   
-      ShellExecuteA ( NULL, "open", szRunDLL32, "SpecialK32.dll,RunDLL_InjectionManager Remove", nullptr, SW_HIDE );
+      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
+        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Remove", nullptr, SW_HIDE );
 
-      return true;
+      //if (! SKX_IsHookingCBT ())
+        return true;
+
+      //return false;
     }
 
     else
       return true;
   }
 
-  return false;
+  return true;
 }
 
-void
-SKIM_GlobalInject_Stop (HWND hWndDlg)
+bool
+SKIM_GlobalInject_Stop (HWND hWndDlg, bool confirm = true)
 {
   MENUITEMINFOW minfo_start,
                 minfo_stop;
@@ -2667,7 +2766,7 @@ SKIM_GlobalInject_Stop (HWND hWndDlg)
   GetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
   GetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
 
-  if (SKIM_GlobalInject_Stop ())
+  if (SKIM_GlobalInject_Stop (confirm))
   {
     SetWindowText (GetDlgItem (hWndDlg, IDC_MANAGE_CMD), L"Start Injecting");
 
@@ -2680,10 +2779,14 @@ SKIM_GlobalInject_Stop (HWND hWndDlg)
     minfo_stop.fState = MFS_CHECKED | MFS_DISABLED;
     
     SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
+
+    return true;
   }
+
+  return false;
 }
 
-void
+bool
 SKIM_GlobalInject_Start (HWND hWndDlg)
 {
   MENUITEMINFOW minfo_start,
@@ -2709,70 +2812,199 @@ SKIM_GlobalInject_Start (HWND hWndDlg)
     minfo_stop.fState = MFS_UNCHECKED | MFS_ENABLED;
 
     SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
+
+    return true;
   }
+
+  return false;
 }
 
-void
-SKIM_GlobalInject_StartStop (HWND hWndDlg)
+bool
+SKIM_GlobalInject_StartStop (HWND hWndDlg, bool confirm = true)
 {
   if (SKIM_GetInjectorState ())
   {
-    SKIM_GlobalInject_Stop (hWndDlg);
+    return SKIM_GlobalInject_Stop (hWndDlg, confirm);
   }
 
   else
   {
-    SKIM_GlobalInject_Start (hWndDlg);
+    return SKIM_GlobalInject_Start (hWndDlg);
   }
+}
+
+size_t
+SKIM_SummarizeInjectedPIDs (std::wstring& out)
+{
+  int count = SKX_GetInjectedPIDs ?
+                SKX_GetInjectedPIDs (nullptr, 0) : 0;
+
+  DWORD*  dwPIDs                 = nullptr;
+  wchar_t wszFileName [MAX_PATH] = { };
+
+  if (SKX_GetInjectedPIDs)
+  {
+    dwPIDs =
+      new DWORD [count + 1] { };
+
+    SKX_GetInjectedPIDs (dwPIDs, count + 1);
+
+    for (int i = 0; i < count; i++)
+    {
+      HANDLE hProc =
+        OpenProcess ( PROCESS_QUERY_INFORMATION,
+                        FALSE,
+                          dwPIDs [i] );
+
+      if (hProc != NULL)
+      {
+        DWORD dwLen = MAX_PATH;
+        QueryFullProcessImageName (hProc, 0x0, wszFileName, &dwLen);
+
+        PathStripPath (wszFileName);
+
+        out += L"\n  ";
+        out += wszFileName;
+
+        CloseHandle (hProc);
+      }
+    }
+
+    delete [] dwPIDs;
+  }
+
+  return count;
+}
+
+HICON
+SKIM_GetSmallStockIcon (SHSTOCKICONID siid)
+{
+  SHSTOCKICONINFO sii = { 0 };
+           sii.cbSize = sizeof (sii);
+
+  SHGetStockIconInfo ( siid,
+                         SHGSI_ICON | SHGSI_SMALLICON | SHGFI_SELECTED,
+                           &sii );
+
+  return sii.hIcon;
+}
+
+#pragma comment (lib, "gdiplus.lib")
+
+void
+SKIM_RefreshTrayMenu (HWND hWndDlg, bool add = false)
+{
+  sys_tray_icon.hIcon        = hIconSKIM_Tray;
+  sys_tray_icon.hBalloonIcon = hIconSKIM_Tray;
+  sys_tray_icon.hWnd         = hWndDlg;
+  sys_tray_icon.guidItem     = SKIM_SystemTray_UUID;
+  sys_tray_icon.uFlags      |= NIF_ICON | NIF_TIP | NIF_MESSAGE |
+                               /*NIF_INFO |*/ NIF_GUID | NIF_SHOWTIP;
+
+  //wcscpy (sys_tray_icon.szInfoTitle, L"Special K Install Manager ");
+  //wcscat (sys_tray_icon.szInfoTitle, SKIM_VERSION_STR_W);
+
+  sys_tray_icon.uCallbackMessage = WM_USER | 0x0420;
+  sys_tray_icon.uVersion         = NOTIFYICON_VERSION;
+  sys_tray_icon.dwInfoFlags     |= NIIF_INFO | NIIF_LARGE_ICON | NIIF_RESPECT_QUIET_TIME;
+
+
+  static std::wstring inject_summary;
+  inject_summary = L"";
+
+  int count =
+    SKIM_SummarizeInjectedPIDs (inject_summary);
+
+  if (count == 0)
+    inject_summary += L"Special K Install Manager v " SKIM_VERSION_STR_W;
+  else
+  {
+    inject_summary = std::wstring (L"Global Injection (SpecialK64.dll)") + inject_summary;
+  }
+
+  wcsncpy (sys_tray_icon.szTip, inject_summary.c_str (), 127);
+
+  //static HICON hIconExit  = 0;
+  //static HICON hIconStart = 0;
+  //static HICON hIconStop  = 0;
+  //static HICON hIconGlobe = 0;
+  //
+  //auto LoadAndApplyIcon = [](SHSTOCKICONID siid, int idx, HMENU hMenu) ->
+  //HICON
+  //{
+  //  HICON         hIcon = SKIM_GetSmallStockIcon (siid);
+  //  MENUITEMINFOW minfo;
+  //
+  //  minfo.cbSize = sizeof MENUITEMINFOW;
+  //
+  //  GetMenuItemInfoW (hMenu, idx, TRUE, &minfo);
+  //
+  //  minfo.fMask    = MIIM_BITMAP | MIIM_FTYPE;
+  //  minfo.fType    = MFT_STRING;
+  //
+  //  ICONINFOEX ici;
+  //  ici.cbSize = sizeof ICONINFOEX;
+  //  
+  //  GetIconInfoEx (hIcon, &ici);
+  //  minfo.hbmpItem = ici.hbmColor;
+  //
+  //  SetMenuItemInfoW (hMenu, idx, TRUE, &minfo);
+  //
+  //  return hIcon;
+  //};
+  //
+  //if (hIconExit  == 0) { hIconExit  = LoadAndApplyIcon (SIID_DELETE,   5, hTrayMenu); }
+  //if (hIconStart == 0) { hIconStart = LoadAndApplyIcon (SIID_SLOWFILE, 2, hTrayMenu); }
+  //if (hIconStop  == 0) { hIconStop  = LoadAndApplyIcon (SIID_ERROR,    3, hTrayMenu); }
+  //if (hIconGlobe == 0) { hIconGlobe = LoadAndApplyIcon (SIID_WORLD,    1, hTrayMenu); }
+
+
+  if (add)
+    Shell_NotifyIcon (NIM_ADD,      &sys_tray_icon);
+  else
+    Shell_NotifyIcon (NIM_MODIFY,   &sys_tray_icon);
+
+
+  Shell_NotifyIcon (NIM_SETVERSION, &sys_tray_icon);
+
+
+  RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
 }
 
 void
 SKIM_SendToTray (HWND hWndDlg)
 {
-  sys_tray_icon.hIcon        = hIconSKIM;
-  sys_tray_icon.hBalloonIcon = hIconSKIM;
-  sys_tray_icon.hWnd         = hWndDlg;
-  sys_tray_icon.guidItem     = SKIM_SystemTray_UUID;
-  sys_tray_icon.uFlags      |= NIF_ICON | NIF_TIP | NIF_MESSAGE |
-                               NIF_INFO | NIF_GUID;
+  SKIM_RefreshTrayMenu (hWndDlg, true);
 
-  wcscpy (sys_tray_icon.szTip, L"Special K Install Manager ");
-  wcscat (sys_tray_icon.szTip, SKIM_VERSION_STR_W);
-
-  wcscpy (sys_tray_icon.szInfoTitle, L"Special K Install Manager ");
-  wcscat (sys_tray_icon.szInfoTitle, SKIM_VERSION_STR_W);
-
-  sys_tray_icon.uCallbackMessage = WM_USER | 0x0420;
-  sys_tray_icon.uVersion         = NOTIFYICON_VERSION_4;
-  sys_tray_icon.dwInfoFlags     |= NIIF_INFO | NIIF_LARGE_ICON | NIIF_RESPECT_QUIET_TIME;
-
-  Shell_NotifyIcon (NIM_ADD,        &sys_tray_icon);
-  Shell_NotifyIcon (NIM_SETVERSION, &sys_tray_icon);
-
-  ShowWindow (hWndDlg, SW_HIDE);
-
+  ShowWindow   (hWndDlg, SW_HIDE);
   RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
 }
 
 void
 SKIM_RestoreFromTray (HWND hWndDlg)
 {
-  ////Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
+  Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
 
   ShowWindow (hWndDlg, SW_RESTORE);
 }
 
 void
-SKIM_StopInjectingAndExit (HWND hWndDlg)
+SKIM_StopInjectingAndExit (HWND hWndDlg, bool confirm = true)
 {
   if (SKIM_GetInjectorState ())
   {
-    SKIM_GlobalInject_StartStop (hWndDlg);
-  
-    Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
-    ExitProcess      (0x00);
+    SKIM_GlobalInject_Stop (hWndDlg, confirm);
   }
+
+  Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
+  ExitProcess      (0x00);
 }
+
+enum {
+  SKIM_STOP_INJECTION          = WM_USER + 0x122,
+  SKIM_STOP_INJECTION_AND_EXIT = WM_USER + 0x123,
+  SKIM_START_INJECTION         = WM_USER + 0x124
+};
 
 INT_PTR
 CALLBACK
@@ -2790,11 +3022,12 @@ Main_DlgProc (
   sk_product_t& product =
     products [ComboBox_GetCurSel (hWndProducts)];
 
-  switch (uMsg) {
+  switch (uMsg)
+  {
     case WM_INITDIALOG:
     {
-      SendMessage (hWndDlg, WM_SETICON, ICON_BIG,   (LPARAM)hIconSKIM);
-      SendMessage (hWndDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIconSKIM);
+      SendMessage (hWndDlg, WM_SETICON, ICON_BIG,   (LPARAM)hIconSKIM_LG);
+      SendMessage (hWndDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIconSKIM_SM);
 
       static bool init = false;
 
@@ -2896,7 +3129,8 @@ Main_DlgProc (
 
       SetCurrentDirectory (startup_dir);
 
-      for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++) {
+      for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
+      {
         SKIM_DetermineInstallState (products [i]);
       }
 
@@ -2905,7 +3139,8 @@ Main_DlgProc (
       ComboBox_SetCurSel    (hWndProducts, last_sel);
       ComboBox_ResetContent (hWndProducts);
 
-      for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++) {
+      for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
+      {
         ComboBox_InsertString (hWndProducts, i, products [i].wszProjectName);
       }
 
@@ -2959,14 +3194,15 @@ Main_DlgProc (
             hWndBranchSelect =
               GetDlgItem (hWndMainDlg, IDC_BRANCH_SELECT);
 
-          wchar_t wszSel [256] = { L'\0' };
+          wchar_t wszSel [256] = { };
 
           ComboBox_GetText (hWndBranchSelect, wszSel, 255);
 
           SKIM_BranchManager::singleton ()->migrateToBranch (wszSel);
           SKIM_BranchManager::singleton ()->setProduct      ((uint32_t)-1);
 
-          if (product.uiSteamAppID != 0) {
+          if (product.uiSteamAppID != 0)
+          {
             _beginthreadex (
               nullptr,
                 0,
@@ -2976,7 +3212,8 @@ Main_DlgProc (
                        nullptr );
           }
 
-          else if (product.uiSteamAppID == 0) {
+          else if (product.uiSteamAppID == 0)
+          {
             _beginthreadex (
               nullptr,
                 0,
@@ -2989,7 +3226,8 @@ Main_DlgProc (
 
         case IDC_INSTALL_CMD:
         {
-          if (product.uiSteamAppID != 0) {
+          if (product.uiSteamAppID != 0)
+          {
             _beginthreadex (
               nullptr,
                 0,
@@ -2999,7 +3237,8 @@ Main_DlgProc (
                        nullptr );
           }
 
-          else if (product.uiSteamAppID == 0) {
+          else if (product.uiSteamAppID == 0)
+          {
             _beginthreadex (
               nullptr,
                 0,
@@ -3010,9 +3249,13 @@ Main_DlgProc (
           }
         } break;
 
+
         case IDC_MANAGE_CMD:
         {
-          if (product.uiSteamAppID == 372360) {
+          // Tales of Symphonia  (has DLC)
+          //
+          if (product.uiSteamAppID == 372360)
+          {
             extern unsigned int
             __stdcall
             DLCDlg_Thread (LPVOID user);
@@ -3031,7 +3274,11 @@ Main_DlgProc (
                                  0x00, nullptr );
           }
 
-          else if (product.uiSteamAppID == 351970) {
+
+          // Tales of Zestiria  (has external config tool)
+          //
+          else if (product.uiSteamAppID == 351970)
+          {
             STARTUPINFO         sinfo = { 0 };
             PROCESS_INFORMATION pinfo = { 0 };
 
@@ -3050,11 +3297,13 @@ Main_DlgProc (
                                     nullptr, SKIM_FindInstallPath (product.uiSteamAppID),
                                       &sinfo, &pinfo );
 
-            if (hWndMainDlg != 0) {
+            if (hWndMainDlg != 0)
+            {
               ShowWindow (hWndMainDlg, SW_HIDE);
             }
 
-            if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0) {
+            if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0)
+            {
               CloseHandle (pinfo.hThread);
               CloseHandle (pinfo.hProcess);
             }
@@ -3064,7 +3313,11 @@ Main_DlgProc (
             SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
           }
 
-          else if (product.uiSteamAppID == 374320) {
+
+          // Dark Souls III  (has external config tool)
+          //
+          else if (product.uiSteamAppID == 374320)
+          {
             STARTUPINFO         sinfo = { 0 };
             PROCESS_INFORMATION pinfo = { 0 };
 
@@ -3083,11 +3336,13 @@ Main_DlgProc (
                                     nullptr, SKIM_FindInstallPath (product.uiSteamAppID),
                                       &sinfo, &pinfo );
 
-            if (hWndMainDlg != 0) {
+            if (hWndMainDlg != 0)
+            {
               ShowWindow (hWndMainDlg, SW_HIDE);
             }
 
-            if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0) {
+            if (WaitForSingleObject ( pinfo.hProcess, INFINITE ) == WAIT_OBJECT_0)
+            {
               CloseHandle (pinfo.hThread);
               CloseHandle (pinfo.hProcess);
             }
@@ -3097,10 +3352,15 @@ Main_DlgProc (
             SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
           }
 
-          else if (product.uiSteamAppID == 0) {
+
+          // Global Injector  (SKIM can start/stop injection)
+          //
+          else if (product.uiSteamAppID == 0)
+          {
             SKIM_GlobalInject_StartStop (hWndDlg);
           }
         }  break;
+
 
         case IDC_UNINSTALL_CMD:
         {
@@ -3113,32 +3373,58 @@ Main_DlgProc (
       return (INT_PTR)true;
     }
 
+    case WM_QUIT:
     case WM_CLOSE:
     case WM_DESTROY:
     {
-      SKIM_StopInjectingAndExit (hWndDlg);
+      if (SKIM_GlobalInject_Stop ())
+      {
+        Shell_NotifyIcon          (NIM_DELETE, &sys_tray_icon);
+        SKIM_StopInjectingAndExit (hWndDlg);
 
-      TerminateProcess (GetCurrentProcess (), 0x00);
-      ExitProcess      (                      0x00);
+        TerminateProcess (GetCurrentProcess (), 0x00);
+        ExitProcess      (                      0x00);
+      }
+
+      else
+        return 1;
     } break;
 
-    case (WM_USER + 0x123):
+    case SKIM_STOP_INJECTION:
     {
-      SKIM_StopInjectingAndExit (hWndDlg);
+      SKIM_GlobalInject_Stop (hWndDlg, false);
+
+      return 0;
+    }
+
+    case SKIM_STOP_INJECTION_AND_EXIT:
+    {
+      SKIM_StopInjectingAndExit (hWndDlg, false);
+
+      return 0;
+    }
+
+    case SKIM_START_INJECTION:
+    {
+      SKIM_GlobalInject_Start (hWndDlg);
 
       return 0;
     }
 
     case (WM_USER | 0x0420):
     {
+      SKIM_RefreshTrayMenu (hWndDlg);
+
       switch (LOWORD (lParam))
       {
         case NIN_BALLOONSHOW:
           break;
         case NIN_POPUPOPEN:
-          break;
+        {
+        } break;
 
         case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
           SKIM_RestoreFromTray (hWndDlg);
           break;
 
@@ -3169,13 +3455,37 @@ Main_DlgProc (
     {
       if ((HMENU)lParam == hTrayMenu)
       {
-        if (LOWORD (wParam) == 2)
-          SKIM_GlobalInject_StartStop (hWndDlg); // Start
-        else if (LOWORD (wParam) == 3)
-          SKIM_GlobalInject_StartStop (hWndDlg); // Stop
-        else if (LOWORD (wParam) == 5)
+        // Magic Numbers Suck, STOP THIS!
+        //
+        switch (LOWORD (wParam))
         {
-          SKIM_StopInjectingAndExit (hWndDlg);
+          case 0:
+          {
+          } break;
+
+          // Start
+          case 2:
+          {
+            SKIM_GlobalInject_Start (hWndDlg);
+          } break;
+
+          // Stop
+          case 3:
+          {
+            SKIM_GlobalInject_Stop (hWndDlg);
+          } break;
+
+          // Exit
+          case 5:
+          {
+            if (SKIM_GlobalInject_Stop (hWndDlg))
+              SKIM_StopInjectingAndExit (hWndDlg);
+          } break;
+
+          // INVALID
+          default:
+          {
+          } break;
         }
       }
 
@@ -3184,15 +3494,16 @@ Main_DlgProc (
 
     case WM_SIZE:
     {
-      if (wParam == SIZE_MINIMIZED)
+      if      (wParam == SIZE_MINIMIZED)
       {
         SKIM_SendToTray (hWndDlg);
       }
 
-      else
+      else if (wParam == SIZE_RESTORED)
       {
         SKIM_RestoreFromTray (hWndDlg);
       }
+
       return (INT_PTR)false;
     } break;
 
@@ -3220,29 +3531,8 @@ SKIM_FindProductByAppID (uint32_t appid)
 void
 SKIM_DisableGlobalInjector (void)
 {
-#if 0
-  if (! SKIM_IsAdmin ()) {
-    wchar_t wszExec [MAX_PATH] = { L'\0' };
-
-    GetModuleFileName (GetModuleHandle (nullptr), wszExec, MAX_PATH);
-
-    ShellExecute ( nullptr,
-                     L"runas",
-                       wszExec,
-                         L"-1", nullptr,
-                           SW_SHOWNORMAL );
-    TerminateProcess (GetCurrentProcess (), 0x00);
-    ExitProcess      (                      0x00);
-  }
-
-  if (SKIM_IsEnabled32 ()) {
-    SKIM_Enable32 (nullptr);
-  }
-
-  if (SKIM_IsEnabled64 ()) {
-    SKIM_Enable64 (nullptr);
-  }
-#endif
+  SKIM_GlobalInject_Stop (false);
+  SKIM_GlobalInject_Free ();
 
   time_t _time;
   time (&_time);
@@ -3251,11 +3541,11 @@ SKIM_DisableGlobalInjector (void)
   wchar_t wsz32BitDLL  [MAX_PATH] = { };
   wchar_t wsz64BitDLL  [MAX_PATH] = { };
 
-  wcscpy   (wsz32BitDLL, SKIM_FindInstallPath (0));
-  lstrcatW (wsz32BitDLL, L"SpecialK32.dll");
+  wcscpy     (wsz32BitDLL, SKIM_FindInstallPath (0));
+  PathAppend (wsz32BitDLL, L"SpecialK32.dll");
 
-  wcscpy   (wsz64BitDLL, SKIM_FindInstallPath (0));
-  lstrcatW (wsz64BitDLL, L"SpecialK64.dll");
+  wcscpy     (wsz64BitDLL, SKIM_FindInstallPath (0));
+  PathAppend (wsz64BitDLL, L"SpecialK64.dll");
 
   GetTempFileNameW (SKIM_FindInstallPath (0), L"SKI", _time, wszTemp);
   MoveFileW        (wsz32BitDLL, wszTemp);
@@ -3273,8 +3563,8 @@ SKIM_DisableGlobalInjector (void)
   wcscpy (wszRepo,      SKIM_FindInstallPath (0));
   wcscpy (wszInstalled, SKIM_FindInstallPath (0));
 
-  lstrcatW (wszInstalled, L"\\Version\\installed.ini");
-  lstrcatW (wszRepo,      L"\\Version\\repository.ini");
+  PathAppend (wszInstalled, L"Version\\installed.ini");
+  PathAppend (wszRepo,      L"Version\\repository.ini");
 
   DeleteFileW (wszInstalled);
   DeleteFileW (wszRepo);
@@ -3290,8 +3580,11 @@ SKIM_MigrateGlobalInjector (LPVOID user)
 {
   HWND hWndParent = (HWND)user;
 
-  wchar_t wszDestDLL32 [MAX_PATH] = { L'\0' };
-  wchar_t wszDestDLL64 [MAX_PATH] = { L'\0' };
+  SKIM_GlobalInject_Stop (false);
+  SKIM_GlobalInject_Free ();
+
+  wchar_t wszDestDLL32 [MAX_PATH] = { };
+  wchar_t wszDestDLL64 [MAX_PATH] = { };
 
   uint32_t dwStrLen = MAX_PATH;
   SKIM_GetDocumentsDir (wszDestDLL32, &dwStrLen);
@@ -3299,8 +3592,8 @@ SKIM_MigrateGlobalInjector (LPVOID user)
   dwStrLen = MAX_PATH;
   SKIM_GetDocumentsDir (wszDestDLL64, &dwStrLen);
 
-  lstrcatW (wszDestDLL32, L"\\My Mods\\SpecialK\\");
-  lstrcatW (wszDestDLL64, L"\\My Mods\\SpecialK\\");
+  PathAppend (wszDestDLL32, L"My Mods\\SpecialK\\");
+  PathAppend (wszDestDLL64, L"My Mods\\SpecialK\\");
 
   // Create the destination directory
   SKIM_CreateDirectories (wszDestDLL32);
@@ -3321,8 +3614,8 @@ SKIM_MigrateGlobalInjector (LPVOID user)
   }
 
   else {
-    lstrcatW (wszDestDLL32, L"SpecialK32.dll");
-    lstrcatW (wszDestDLL64, L"SpecialK64.dll");
+    PathAppend (wszDestDLL32, L"SpecialK32.dll");
+    PathAppend (wszDestDLL64, L"SpecialK64.dll");
 
     sk_product_t sk32 =
     {
@@ -3368,11 +3661,6 @@ SKIM_MigrateGlobalInjector (LPVOID user)
     SKIM_FetchInjector64 (sk64);
 #endif
 
-    SKIM_Enable32 (wszDestDLL32);
-
-#ifdef _WIN64
-    SKIM_Enable64 (wszDestDLL64);
-#endif
 
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -3393,12 +3681,12 @@ SKIM_MigrateGlobalInjector (LPVOID user)
     TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
   }
 
-#if 1
+
+  SKIM_GlobalInject_Start ();
+
   ShowWindow  ((HWND)hWndParent, SW_SHOW);
   SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
-#else
-  PostMessage ((HWND)hWndParent, WM_CLOSE, 0x00, 0x00);
-#endif
+
 
   SKIM_OnProductSelect          ();
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
@@ -3412,23 +3700,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
 {
   HWND hWndParent = (HWND)user;
 
-#if 0
-  if (! SKIM_IsAdmin ()) {
-    wchar_t wszExec [MAX_PATH] = { L'\0' };
-
-    GetModuleFileName (GetModuleHandle (nullptr), wszExec, MAX_PATH);
-
-    ShellExecute ( (HWND)hWndParent,
-                     L"runas",
-                       wszExec,
-                         L"0", nullptr,
-                           SW_SHOWNORMAL );
-    PostMessage ( (HWND)hWndParent, WM_CLOSE, 0x00, 0x00 );
-
-    TerminateProcess (GetCurrentProcess (), 0x00);
-    ExitProcess      (                      0x00);
-  }
-#endif
+  SKIM_GlobalInject_Stop (false);
 
   wchar_t wszDestDLL32 [MAX_PATH] = {  };
   wchar_t wszDestDLL64 [MAX_PATH] = {  };
@@ -3439,8 +3711,8 @@ SKIM_InstallGlobalInjector (LPVOID user)
   dwStrLen = MAX_PATH;
   SKIM_GetDocumentsDir (wszDestDLL64, &dwStrLen);
 
-  lstrcatW (wszDestDLL32, L"\\My Mods\\SpecialK\\");
-  lstrcatW (wszDestDLL64, L"\\My Mods\\SpecialK\\");
+  PathAppend (wszDestDLL32, L"My Mods\\SpecialK\\");
+  PathAppend (wszDestDLL64, L"My Mods\\SpecialK\\");
 
   // Create the destination directory
   SKIM_CreateDirectories (wszDestDLL32);
@@ -3448,9 +3720,9 @@ SKIM_InstallGlobalInjector (LPVOID user)
   wchar_t wszDestInstaller [MAX_PATH] = { };
   lstrcatW (wszDestInstaller, wszDestDLL32);
 #ifdef _WIN64
-  lstrcatW (wszDestInstaller, L"\\SKIM64.exe");
+  PathAppend (wszDestInstaller, L"SKIM64.exe");
 #else
-  lstrcatW (wszDestInstaller, L"\\SKIM.exe");
+  PathAppend (wszDestInstaller, L"SKIM.exe");
 #endif
 
   wchar_t wszExec [MAX_PATH] = { };
@@ -3470,7 +3742,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
 
   MessageBox ( NULL,
                  L"The Global Version of Special K is Partially Installed\r\n\r\n"
-                 L"\tClick \"Start Injecting\" and Launch a Steam Game to Finish",
+                 L"\tLaunch a Steam Game to Finish Setup",
                    L"Global Injection Installation Pending",
                      MB_OK | MB_ICONINFORMATION );
 
@@ -3496,8 +3768,8 @@ SKIM_InstallGlobalInjector (LPVOID user)
   else 
 #endif
   {
-    lstrcatW (wszDestDLL32, L"SpecialK32.dll");
-    lstrcatW (wszDestDLL64, L"SpecialK64.dll");
+    PathAppend (wszDestDLL32, L"SpecialK32.dll");
+    PathAppend (wszDestDLL64, L"SpecialK64.dll");
 
     sk_product_t sk32 =
     {
@@ -3543,13 +3815,6 @@ SKIM_InstallGlobalInjector (LPVOID user)
     SKIM_FetchInjector64  (sk64);
 #endif
 
-    //SKIM_FetchInstallerDLL (products [0]);
-    ////SKIM_Enable32 (wszDestDLL32);
-
-#ifdef _WIN64
-    ////SKIM_Enable64 (wszDestDLL64);
-#endif
-
     HMODULE hModInstaller =
       LoadLibrary (wszDestDLL64);
 
@@ -3579,18 +3844,21 @@ SKIM_InstallGlobalInjector (LPVOID user)
     }
   }
 
-#if 1
+
+
   ShowWindow  ((HWND)hWndParent, SW_SHOW);
   SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
-#else
-  PostMessage ((HWND)hWndParent, WM_CLOSE, 0x00, 0x00);
-#endif
+
+  SKIM_GlobalInject_Start ();
+
 
   SKIM_OnProductSelect          ();
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
 
   return 0;
 }
+
+#include <memory>
 
 int
 WINAPI
@@ -3599,40 +3867,47 @@ wWinMain ( _In_     HINSTANCE hInstance,
            _In_     LPWSTR    lpCmdLine,
            _In_     int       nCmdShow )
 {
-  g_hInstance =           hInstance;
-  hIconSKIM   = LoadIcon (hInstance, MAKEINTRESOURCE (IDI_ICON1));
+  g_hInstance    =                   hInstance;
+  hIconSKIM_LG   = (HICON)LoadImage (hInstance, MAKEINTRESOURCE (IDI_ICON1), IMAGE_ICON, 128, 128, 0x00);
+  hIconSKIM_SM   =        LoadIcon  (hInstance, MAKEINTRESOURCE (IDI_ICON1));
+  hIconSKIM_Tray =        LoadIcon  (hInstance, MAKEINTRESOURCE (IDI_TRAY));
+
+  GetCurrentDirectoryW (MAX_PATH, startup_dir);
+
+
+  std::unique_ptr <wchar_t> wszCmdLine (
+    GetCommandLineW ()
+  );
+
+  wchar_t* wszArgs =
+    PathGetArgsW (wszCmdLine.get ());
+
+
+                                 WNDCLASS wc = { };
+  GetClassInfo  (g_hInstance, L"#32770", &wc);
+                                          wc.lpszClassName = L"SKIM_Frontend";
+  RegisterClass (                        &wc);
+
+  HWND hWndExisting =
+    FindWindow (L"SKIM_Frontend", nullptr);
+
 
 
   bool injector_action = false;
   bool __SKIM_Inject   = false,
        __SKIM_Uninject = false;
 
-  if (wcslen (GetCommandLineW ()) && StrStrIW (GetCommandLineW (), L"\"") == nullptr)
+  if (wcslen (wszArgs))
   {
-         if (StrStrIW (GetCommandLineW (), L"+Inject")) __SKIM_Inject   = true;
-    else if (StrStrIW (GetCommandLineW (), L"-Inject")) __SKIM_Uninject = true;
+         if (StrStrIW (wszArgs, L"+Inject")) __SKIM_Inject   = true;
+    else if (StrStrIW (wszArgs, L"-Inject")) __SKIM_Uninject = true;
 
     if (__SKIM_Inject || __SKIM_Uninject)
       injector_action = true;
   }
 
-
-  WNDCLASS wc = { };
-
-  GetClassInfo  (g_hInstance, L"#32770", &wc);
-                                         wc.lpszClassName = L"SKIM_Frontend";
-  RegisterClass (                       &wc);
-
-  GetCurrentDirectoryW (MAX_PATH, startup_dir);
-
-  for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++) {
-    SKIM_DetermineInstallState (products [i]);
-  }
-
-  HWND hWndExisting = FindWindow (L"SKIM_Frontend", nullptr);
-
-
-  if ((! injector_action) && IsWindow (hWndExisting))
+  // If we're not starting / stopping injection, then reuse an existing instance.
+  else if ((! wcslen (wszArgs)) && IsWindow (hWndExisting))
   {
     SetForegroundWindow (hWndExisting);
     BringWindowToTop    (hWndExisting);
@@ -3644,23 +3919,65 @@ wWinMain ( _In_     HINSTANCE hInstance,
   }
 
 
-  if (__SKIM_Uninject)
+  for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
   {
-    if (IsWindow (hWndExisting))
-      SendMessage (hWndExisting, WM_USER + 0x123, 0, 0);
-
-    TerminateProcess (GetCurrentProcess (), 0x00);
-    ExitProcess      (                      0x00);
+    SKIM_DetermineInstallState (products [i]);
   }
 
 
-  hWndMainDlg =
-    CreateDialog ( hInstance,
-                     MAKEINTRESOURCE (IDD_FRONTEND),
-                       0,
-                         Main_DlgProc );
+  if (injector_action)
+  {
+    if (__SKIM_Uninject)
+    {
+      // Exit the existing instance
+      if (IsWindow (hWndExisting))
+        SendMessage (hWndExisting, SKIM_STOP_INJECTION_AND_EXIT, 0, 0);
 
-  wchar_t wszTitle [128] = { L'\0' };
+      TerminateProcess (GetCurrentProcess (), 0x00);
+      ExitProcess      (                      0x00);
+    }
+
+    if (__SKIM_Inject)
+    {
+      __SKIM_Inject = false;
+
+      if ((! IsWindow (hWndExisting)) && SKIM_GlobalInject_Start ())
+      {
+        hWndMainDlg =
+          CreateDialog ( hInstance,
+                           MAKEINTRESOURCE (IDD_FRONTEND),
+                             0,
+                               Main_DlgProc );
+
+        // Minimize to system tray immediately
+        PostMessage (hWndMainDlg, WM_SIZE, SIZE_MINIMIZED, 0);
+      }
+
+      else
+      {
+        if (IsWindow (hWndExisting))
+          SendMessage (hWndExisting, SKIM_START_INJECTION, 0, 0);
+
+        TerminateProcess (GetCurrentProcess (), 0x00);
+        ExitProcess      (                      0x00);
+      }
+    }
+  }
+
+  else
+  {
+    hWndMainDlg =
+      CreateDialog ( hInstance,
+                       MAKEINTRESOURCE (IDD_FRONTEND),
+                         0,
+                           Main_DlgProc );
+
+    // Show normally (or whatever nCmdShow tells us to do)
+    ShowWindow (hWndMainDlg, nCmdShow);
+  }
+
+
+  wchar_t wszTitle [128] = { };
   lstrcatW ( wszTitle,
                 L"Special K Install Manager - (v " );
   lstrcatW ( wszTitle,
@@ -3670,34 +3987,21 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
   SetWindowText (hWndMainDlg, wszTitle);
 
-  if (injector_action)
-  {
-    if (__SKIM_Inject)
-    {
-      __SKIM_Inject = false;
-
-      SKIM_GlobalInject_Start (hWndMainDlg);
-      PostMessage             (hWndMainDlg, WM_SIZE, SIZE_MINIMIZED, 0);
-    }
-  }
-
-  else
-    ShowWindow (hWndMainDlg, nCmdShow);
-
 
   // We can install PlugIns by passing their AppID through the cmdline
-  if ((! injector_action) && wcslen (GetCommandLineW ()) && StrStrIW (GetCommandLineW (), L"\"") == nullptr && StrStrIW (GetCommandLineW (), L" "))
+  if ((! injector_action) && wcslen (wszArgs))
   {
-    child = true;
+    int32_t appid = _wtoi (wszArgs);
 
-    int32_t appid =  _wtoi (GetCommandLineW ());
+    if (appid > 0)
+    {
+      sk_product_t* prod =
+        SKIM_FindProductByAppID (appid);
 
-    sk_product_t* prod =
-      SKIM_FindProductByAppID (appid);
-
-    if (appid > 0) {
       if (prod != nullptr)
       {
+        child = true;
+
         // Set the correct selection after re-launching
         uintptr_t idx = ( (uintptr_t)prod - (uintptr_t)products ) /
                          sizeof sk_product_t;
@@ -3717,8 +4021,11 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
     else
     {
+      bool zero = StrStrIW (wszArgs, L"0")  != nullptr ? wcslen (StrStrIW (wszArgs, L"0"))  == 1 : false;
+      bool neg1 = StrStrIW (wszArgs, L"-1") != nullptr ? wcslen (StrStrIW (wszArgs, L"-1")) == 2 : false;
+
       // Install Global Injector
-      if (appid == 0)
+      if (zero && appid == 0)
       {
         _beginthreadex (
           nullptr,
@@ -3730,12 +4037,12 @@ wWinMain ( _In_     HINSTANCE hInstance,
       }
 
       // Uninstall Global Injector
-      else if (appid == -1)
+      else if (neg1)
       {
-          _beginthreadex (
-            nullptr,
-              0,
-                SKIM_UninstallProduct, SKIM_FindProductByAppID (0), 0x00, nullptr);
+        _beginthreadex (
+          nullptr,
+            0,
+              SKIM_UninstallProduct, SKIM_FindProductByAppID (0), 0x00, nullptr);
       }
     }
   }

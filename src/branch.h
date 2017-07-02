@@ -179,6 +179,10 @@ protected:
         iSK_INISection& sec =
           installed->get_section (L"Version.Local");
 
+        if (! sec.contains_key (L"Branch"))
+          sec.add_key_value (L"Branch", wszName);
+
+
         std::wstring& ini_branch =
           sec.get_value (L"Branch");
 
@@ -193,8 +197,6 @@ protected:
         sec.remove_key    (L"InstallPackage");
         sec.add_key_value (L"InstallPackage", L"PendingBranchMigration,0");
 
-        sec.remove_key    (L"Branch");
-        sec.add_key_value (L"Branch",         ini_branch.c_str ());
 
         iSK_INISection& update_sec =
           installed->get_section (L"Update.User");

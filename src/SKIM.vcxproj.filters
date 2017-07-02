@@ -29,5 +29,6 @@
   <ItemGroup>
     <Image Include="..\donate.bmp" />
     <Image Include="..\SKIM.ico" />
+    <Image Include="..\tray.ico" />
   </ItemGroup>
 </Project>
