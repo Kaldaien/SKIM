@@ -24,7 +24,7 @@
 
 bool
 __stdcall
-SKIM_FetchDLCManagerDLL (  sk_product_t  product,
+SKIM_FetchDLCManagerDLL (  sk_product_t&  product,
                            const wchar_t *wszRemoteFile =
 #ifndef _WIN64
 L"installer.dll"
@@ -911,7 +911,7 @@ SKIM_Download_Thread (LPVOID user)
 
 bool
 __stdcall
-SKIM_FetchInstallerDLL (  sk_product_t  product,
+SKIM_FetchInstallerDLL (  sk_product_t& product,
                          const wchar_t *wszRemoteFile =
 #ifndef _WIN64
 L"installer.dll"
@@ -989,14 +989,14 @@ L"injector64.dll"
 
 bool
 __stdcall
-SKIM_FetchInstaller32 ( sk_product_t product )
+SKIM_FetchInstaller32 ( sk_product_t& product )
 {
   return SKIM_FetchInstallerDLL ( product, L"installer.dll" );
 }
 
 bool
 __stdcall
-SKIM_FetchInstaller64 ( sk_product_t product )
+SKIM_FetchInstaller64 ( sk_product_t& product )
 {
   return SKIM_FetchInstallerDLL ( product, L"installer64.dll" );
 }
@@ -1005,14 +1005,14 @@ SKIM_FetchInstaller64 ( sk_product_t product )
 
 bool
 __stdcall
-SKIM_FetchInjector32 ( sk_product_t product )
+SKIM_FetchInjector32 ( sk_product_t& product )
 {
   return SKIM_FetchInjectorDLL ( product, L"injector.dll" );
 }
 
 bool
 __stdcall
-SKIM_FetchInjector64 ( sk_product_t product )
+SKIM_FetchInjector64 ( sk_product_t& product )
 {
   return SKIM_FetchInjectorDLL ( product, L"injector64.dll" );
 }

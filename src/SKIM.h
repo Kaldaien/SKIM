@@ -26,6 +26,7 @@ bool SKIM_Depends_TestVisualCRuntime (SK_ARCHITECTURE arch);
 
 bool SKIM_Util_IsAdmin           (void);
 bool SKIM_Util_IsProcessRunning  (const wchar_t* wszProcName);
+bool SKIM_Util_IsDirectory       (const wchar_t* wszPath);
 bool SKIM_Util_IsDLLFromProduct  (const wchar_t* wszName, const wchar_t* wszProductName);
 
 bool SKIM_Util_CreateDirectories (const wchar_t* wszPath);
@@ -55,7 +56,8 @@ bool SKIM_ConfirmClose    (void);
 enum {
   SKIM_STOP_INJECTION          = WM_USER + 0x122,
   SKIM_STOP_INJECTION_AND_EXIT = WM_USER + 0x123,
-  SKIM_START_INJECTION         = WM_USER + 0x124
+  SKIM_START_INJECTION         = WM_USER + 0x124,
+  SKIM_RESTART_INJECTION       = WM_USER + 0x125
 };
 
 //

@@ -6,7 +6,6 @@
 #pragma once
 #include <sal.h>
 
-#define ISOLATION_AWARE_ENABLED 1
 #pragma comment (lib,    "advapi32.lib")
 #pragma comment (lib,    "user32.lib")
 #pragma comment (lib,    "comctl32.lib")
