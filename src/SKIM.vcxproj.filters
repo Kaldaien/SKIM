@@ -8,6 +8,9 @@
       <Filter>DLC</Filter>
     </ClCompile>
     <ClCompile Include="ini.cpp" />
+    <ClCompile Include="system_tray.cpp" />
+    <ClCompile Include="injection.cpp" />
+    <ClCompile Include="network.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppInit_DLLs.h" />
@@ -17,6 +20,11 @@
     <ClInclude Include="APP_VERSION.H" />
     <ClInclude Include="ini.h" />
     <ClInclude Include="branch.h" />
+    <ClInclude Include="injection.h" />
+    <ClInclude Include="system_tray.h" />
+    <ClInclude Include="SKIM.h" />
+    <ClInclude Include="product.h" />
+    <ClInclude Include="network.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="SKIM.rc" />
@@ -30,5 +38,16 @@
     <Image Include="..\donate.bmp" />
     <Image Include="..\SKIM.ico" />
     <Image Include="..\tray.ico" />
+    <Image Include="..\icon2.ico" />
+    <Image Include="..\exit.ico" />
+    <Image Include="..\start.ico" />
+    <Image Include="..\stop.ico" />
+    <Image Include="..\startup.ico" />
+    <Image Include="..\bitmap1.bmp" />
+    <Image Include="..\exit.bmp" />
+    <Image Include="..\start.bmp" />
+    <Image Include="..\icon3.ico" />
+    <Image Include="..\bitmap2.bmp" />
+    <Image Include="..\bitmap3.bmp" />
   </ItemGroup>
 </Project>

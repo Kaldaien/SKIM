@@ -1,5 +1,9 @@
 #pragma once
 
+#include <string>
+#include <vector>
+#include "ini.h"
+
 extern const wchar_t*
 SKIM_FindInstallPath (uint32_t appid);
 

@@ -24,7 +24,33 @@
 #include <cstdint>
 
 #include <string>
+#include <memory>
 #include <algorithm>
+
+#pragma comment (lib,    "advapi32.lib")
+#pragma comment (lib,    "user32.lib")
+#pragma comment (lib,    "comctl32.lib")
+#pragma comment (linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' "  \
+                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df'" \
+                         " language='*'\"")
+#include "winbase.h"
+
+#include <WindowsX.h>
+#include <time.h>
+
+#include <Msi.h>
+#pragma comment (lib, "msi.lib")
+
+#include <MMSystem.h>
+#include <Winver.h>
+//#pragma comment (lib, "Mincore_Downlevel.lib") // Windows 8     (Delay-Load)
+#pragma comment (lib, "version.lib")             // Windows 2000+ (Normal Import)
+#include <Richedit.h>
+
+#define NOMINMAX
+
+#include "system_tray.h"
+#include "injection.h"
 
 #include "Resource.h"
 
@@ -32,81 +58,23 @@
 #include "APP_VERSION.H"
 #include "ini.h"
 #include "branch.h"
+#include "network.h"
+#include "SKIM.h"
 
-#include <CommCtrl.h>
-#pragma comment (lib,    "advapi32.lib")
-#pragma comment (lib,    "user32.lib")
-#pragma comment (lib,    "comctl32.lib")
-#pragma comment (linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' "  \
-                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df'" \
-                         " language='*'\"")
-#include <Richedit.h>
-
-#define GDIPVER 0x0110
-#include <gdiplus.h>
-#define NOMINMAX
-
-// {012BFDBD-790D-4A7B-9BC4-A2632D2569D9}
-static const GUID SKIM_SystemTray_UUID = 
-{ 0x12bfdbd, 0x790d, 0x4a7b, { 0x9b, 0xc4, 0xa2, 0x63, 0x2d, 0x25, 0x69, 0xd9 } };
 
 HICON       hIconSKIM_LG;
 HICON       hIconSKIM_SM;
-HICON       hIconSKIM_Tray;
 
 HINSTANCE g_hInstance;
 
 bool child = false;
 wchar_t startup_dir [MAX_PATH + 1] = { };
 
-void
-SKIM_DisableGlobalInjector (void);
-
-unsigned int
-__stdcall
-SKIM_InstallGlobalInjector (LPVOID user);
-
-unsigned int
-__stdcall
-SKIM_MigrateGlobalInjector (LPVOID user);
-
-bool
-SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen);
-
 unsigned int
 __stdcall
 SKIM_FeatureUnsupportedMessage (LPVOID user);
 
-size_t
-SKIM_SummarizeInjectedPIDs (std::wstring& out);
-
-enum SK_ARCHITECTURE {
-  SK_32_BIT   = 0x01,
-  SK_64_BIT   = 0x02,
-
-  SK_BOTH_BIT = 0x03
-};
-
-void
-SKIM_OnProductSelect (void);
-
-void
-SKIM_OnBranchSelect (void);
-
-struct sk_product_t {
-  wchar_t         wszWrapper        [MAX_PATH];
-  wchar_t         wszPlugIn         [32];
-  wchar_t         wszDLLProductName [128];
-  wchar_t         wszGameName       [128];
-  wchar_t         wszProjectName    [128];
-  wchar_t         wszRepoName       [32];
-  wchar_t         wszDonateID       [16];
-  uint32_t        uiSteamAppID;
-  SK_ARCHITECTURE architecture;
-  wchar_t*        wszDescription;
-
-   int32_t        install_state; // To be filled-in later
-} products [] =
+sk_product_t products [] =
 
 {
   {
@@ -294,7 +262,7 @@ struct sk_product_t {
 };
 
 const wchar_t*
-SKIM_GetSteamDir (void)
+SKIM_SteamUtil_GetInstallDir (void)
 {
          DWORD   len         = MAX_PATH;
   static wchar_t wszSteamPath [MAX_PATH];
@@ -315,7 +283,7 @@ SKIM_GetSteamDir (void)
 }
 
 bool
-SKIM_CreateDirectories ( const wchar_t* wszPath )
+SKIM_Util_CreateDirectories ( const wchar_t* wszPath )
 {
   wchar_t* wszSubDir = _wcsdup (wszPath), *iter;
 
@@ -394,7 +362,7 @@ SKIM_FindInstallPath (uint32_t appid)
   {
     uint32_t dwLen = MAX_PATH;
 
-    SKIM_GetDocumentsDir (wszGamePath, &dwLen);
+    SKIM_Util_GetDocumentsDir (wszGamePath, &dwLen);
 
     PathAppend (wszGamePath, L"My Mods\\SpecialK\\");
 
@@ -413,7 +381,7 @@ SKIM_FindInstallPath (uint32_t appid)
 
   if (! scanned_libs) {
     wszSteamPath =
-      SKIM_GetSteamDir ();
+      SKIM_SteamUtil_GetInstallDir ();
 
       if (wszSteamPath != nullptr) {
         wchar_t wszLibraryFolders [MAX_PATH] = { };
@@ -760,7 +728,7 @@ private:
 };
 
 bool
-SKIM_IsAdmin (void)
+SKIM_Util_IsAdmin (void)
 {
   bool   bRet   = false;
   HANDLE hToken = 0;
@@ -781,7 +749,7 @@ SKIM_IsAdmin (void)
 }
 
 bool
-SKIM_IsProcessRunning (const wchar_t* wszProcName)
+SKIM_Util_IsProcessRunning (const wchar_t* wszProcName)
 {
   HANDLE         hProcSnap;
   PROCESSENTRY32 pe32;
@@ -812,7 +780,7 @@ SKIM_IsProcessRunning (const wchar_t* wszProcName)
 }
 
 bool
-SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
+SKIM_Util_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
 {
   HANDLE hToken;
 
@@ -840,491 +808,31 @@ SKIM_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
   return false;
 }
 
-//
-// XXX: DEPRECATED - Does nothing, re-write any code that uses this
-//
+
+
+#include <MMSystem.h>
+
 void
-SKIM_EnableAppInitDLLs (bool enable)
+SKIM_Util_MoveFileNoFail ( const wchar_t* wszOld, const wchar_t* wszNew )
 {
-  BOOL bWoW64 = FALSE;
+  if (! MoveFileExW ( wszOld,
+                        wszNew,
+                          MOVEFILE_REPLACE_EXISTING ) )
+  {
+    wchar_t wszTemp [MAX_PATH] = { };
+    GetTempFileNameW (nullptr, L"SKI", timeGetTime (), wszTemp);
 
-  IsWow64Process (GetCurrentProcess (), &bWoW64);
-
-  if (enable)
-    return;
-}
-
-
-#include <WinInet.h>
-#pragma comment (lib, "wininet.lib")
-
-bool
-__stdcall
-SKIM_FetchDLCManagerDLL (  sk_product_t  product,
-                           const wchar_t *wszRemoteFile =
-#ifndef _WIN64
-L"installer.dll"
-#else
-L"installer64.dll"
-#endif
-)
-{
-UNREFERENCED_PARAMETER (product);
-
-  DWORD dwInetCtx = 0;
-
-  HINTERNET hInetRoot =
-    InternetOpen (
-      L"Special K Install Manager",
-        INTERNET_OPEN_TYPE_DIRECT,
-          nullptr, nullptr,
-            0x00
-    );
-
-  if (! hInetRoot)
-    return false;
-
-  HINTERNET hInetGitHub =
-    InternetConnect ( hInetRoot,
-                        L"raw.githubusercontent.com",
-                          INTERNET_DEFAULT_HTTP_PORT,
-                            nullptr, nullptr,
-                              INTERNET_SERVICE_HTTP,
-                                0x00,
-                                  (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHub) {
-    InternetCloseHandle (hInetRoot);
-    return false;
+    MoveFileExW ( wszNew, wszTemp, 0x00 );
   }
-
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
-
-  wsprintf ( wszRemoteRepoURL,
-// REMOVE 5/13/17 to deal with GitHub nonsense -- //L"/Kaldaien/SpecialK/master/%s",
-               L"/Kaldaien/FAR/master/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
-
-  PCWSTR  rgpszAcceptTypes []         = { L"*/*", nullptr };
-
-  HINTERNET hInetGitHubOpen =
-    HttpOpenRequest ( hInetGitHub,
-                        nullptr,
-                          wszRemoteRepoURL,
-                            L"HTTP/1.1",
-                              nullptr,
-                                rgpszAcceptTypes,
-                                  INTERNET_FLAG_MAKE_PERSISTENT   | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID |
-                                  INTERNET_FLAG_CACHE_IF_NET_FAIL | INTERNET_FLAG_IGNORE_CERT_CN_INVALID   |
-                                  INTERNET_FLAG_RESYNCHRONIZE     | INTERNET_FLAG_CACHE_ASYNC              |
-                                  INTERNET_FLAG_NEED_FILE,
-                                    (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHubOpen) {
-    InternetCloseHandle (hInetGitHub);
-    InternetCloseHandle (hInetRoot);
-    return false;
-  }
-
-  if ( HttpSendRequestW ( hInetGitHubOpen,
-                            nullptr,
-                              0,
-                                nullptr,
-                                  0 ) ) {
-    DWORD dwSize;
-
-    if ( InternetQueryDataAvailable ( hInetGitHubOpen,
-                                        &dwSize,
-                                          0x00, NULL )
-      )
-    {
-      DWORD dwAttribs = GetFileAttributes (wszRemoteFile);
-
-      if (dwAttribs == INVALID_FILE_ATTRIBUTES)
-        dwAttribs = FILE_ATTRIBUTE_NORMAL;
-
-      HANDLE hVersionFile =
-        CreateFileW ( wszRemoteFile,
-                        GENERIC_READ | GENERIC_WRITE,
-                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                            nullptr,
-                              CREATE_ALWAYS,
-                                dwAttribs |
-                                FILE_FLAG_SEQUENTIAL_SCAN,
-                                  nullptr );
-
-      while (hVersionFile != INVALID_HANDLE_VALUE && dwSize > 0) {
-        DWORD    dwRead = 0;
-        uint8_t *pData  = (uint8_t *)malloc (dwSize);
-
-        if (! pData)
-          break;
-
-        if ( InternetReadFile ( hInetGitHubOpen,
-                                  pData,
-                                    dwSize,
-                                      &dwRead )
-          )
-        {
-          DWORD dwWritten;
-
-          WriteFile ( hVersionFile,
-                        pData,
-                          dwRead,
-                            &dwWritten,
-                              nullptr );
-        }
-
-        free (pData);
-        pData = nullptr;
-
-        if (! InternetQueryDataAvailable ( hInetGitHubOpen,
-                                             &dwSize,
-                                               0x00, NULL
-                                         )
-           ) break;
-      }
-
-      if (hVersionFile != INVALID_HANDLE_VALUE)
-        CloseHandle (hVersionFile);
-    }
-
-    HttpEndRequest ( hInetGitHubOpen, nullptr, 0x00, 0 );
-  }
-
-  InternetCloseHandle (hInetGitHubOpen);
-  InternetCloseHandle (hInetGitHub);
-  InternetCloseHandle (hInetRoot);
-
-  return true;
-}
-
-bool
-__stdcall
-SKIM_FetchInstallerDLL (  sk_product_t  product,
-                         const wchar_t *wszRemoteFile =
-#ifndef _WIN64
-L"installer.dll"
-#else
-L"installer64.dll"
-#endif
-)
-{
-  DWORD dwInetCtx = 0;
-
-  HINTERNET hInetRoot =
-    InternetOpen (
-      L"Special K Install Manager",
-        INTERNET_OPEN_TYPE_DIRECT,
-          nullptr, nullptr,
-            0x00
-    );
-
-  if (! hInetRoot)
-    return false;
-
-  HINTERNET hInetGitHub =
-    InternetConnect ( hInetRoot,
-                        L"raw.githubusercontent.com",
-                          INTERNET_DEFAULT_HTTP_PORT,
-                            nullptr, nullptr,
-                              INTERNET_SERVICE_HTTP,
-                                0x00,
-                                  (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHub) {
-    InternetCloseHandle (hInetRoot);
-    return false;
-  }
-
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
-
-  wsprintf ( wszRemoteRepoURL,
-               L"/Kaldaien/FAR/master/%s",
-    // REMOVE 5/13/17 to deal with GitHub nonsense -- //L"/Kaldaien/SpecialK/master/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
-
-  PCWSTR  rgpszAcceptTypes []         = { L"*/*", nullptr };
-
-  HINTERNET hInetGitHubOpen =
-    HttpOpenRequest ( hInetGitHub,
-                        nullptr,
-                          wszRemoteRepoURL,
-                            L"HTTP/1.1",
-                              nullptr,
-                                rgpszAcceptTypes,
-                                  INTERNET_FLAG_MAKE_PERSISTENT   | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID |
-                                  INTERNET_FLAG_CACHE_IF_NET_FAIL | INTERNET_FLAG_IGNORE_CERT_CN_INVALID   |
-                                  INTERNET_FLAG_RESYNCHRONIZE     | INTERNET_FLAG_CACHE_ASYNC              |
-                                  INTERNET_FLAG_NEED_FILE,
-                                    (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHubOpen) {
-    InternetCloseHandle (hInetGitHub);
-    InternetCloseHandle (hInetRoot);
-    return false;
-  }
-
-  DWORD dwSize    = 0;
-  DWORD dwWritten = 0;
-
-  if ( HttpSendRequestW ( hInetGitHubOpen,
-                            nullptr,
-                              0,
-                                nullptr,
-                                  0 ) ) {
-
-    if ( InternetQueryDataAvailable ( hInetGitHubOpen,
-                                        &dwSize,
-                                          0x00, NULL )
-      )
-    {
-      DWORD dwAttribs = GetFileAttributes (product.wszWrapper);
-
-      if (dwAttribs == INVALID_FILE_ATTRIBUTES)
-        dwAttribs = FILE_ATTRIBUTE_NORMAL;
-
-      HANDLE hDLLFile =
-        CreateFileW ( product.wszWrapper,
-                        GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE,
-                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                            nullptr,
-                              CREATE_ALWAYS,
-                                dwAttribs |
-                                FILE_FLAG_SEQUENTIAL_SCAN,
-                                  nullptr );
-
-      while (hDLLFile != INVALID_HANDLE_VALUE && dwSize > 0) {
-        DWORD    dwRead = 0;
-        uint8_t *pData  = (uint8_t *)malloc (dwSize);
-
-        if (! pData)
-          break;
-
-        if ( InternetReadFile ( hInetGitHubOpen,
-                                  pData,
-                                    dwSize,
-                                      &dwRead )
-          )
-        {
-          WriteFile ( hDLLFile,
-                        pData,
-                          dwRead,
-                            &dwWritten,
-                              nullptr );
-        }
-
-        free (pData);
-        pData = nullptr;
-
-        if (! InternetQueryDataAvailable ( hInetGitHubOpen,
-                                             &dwSize,
-                                               0x00, NULL
-                                         )
-           ) break;
-      }
-
-      if (hDLLFile != INVALID_HANDLE_VALUE)
-        CloseHandle (hDLLFile);
-    }
-
-    //HttpEndRequest ( hInetGitHubOpen, nullptr, 0x00, 0 );
-  }
-
-  InternetCloseHandle (hInetGitHubOpen);
-  InternetCloseHandle (hInetGitHub);
-  InternetCloseHandle (hInetRoot);
-
-
-  // TODO: Add Checksum Validation, since HTTP 404 errors are treated by WININET as
-  //         files rather than errors ;)
-  //
-  //         Problem with this is constantly updating the expected checksum, I will need
-  //           to engineer a tool to properly push updated installer DLLs with this metadata
-  //             at _some_ point.
-
-  //
-  // For now, just assume that a 2 MiB 404 Not Found Error is extremely unlikely
-  //
-  if (dwWritten > 1024 * 2048)
-    return true;
-
-  return false;
-}
-
-bool
-__stdcall
-SKIM_FetchInjectorDLL (  sk_product_t  product,
-                         const wchar_t *wszRemoteFile =
-#ifndef _WIN64
-L"injector.dll"
-#else
-L"injector64.dll"
-#endif
-)
-{
-  DWORD dwInetCtx = 0;
-
-  HINTERNET hInetRoot =
-    InternetOpen (
-      L"Special K Install Manager",
-        INTERNET_OPEN_TYPE_DIRECT,
-          nullptr, nullptr,
-            0x00
-    );
-
-  if (! hInetRoot)
-    return false;
-
-  HINTERNET hInetGitHub =
-    InternetConnect ( hInetRoot,
-                        L"raw.githubusercontent.com",
-                          INTERNET_DEFAULT_HTTP_PORT,
-                            nullptr, nullptr,
-                              INTERNET_SERVICE_HTTP,
-                                0x00,
-                                  (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHub) {
-    InternetCloseHandle (hInetRoot);
-    return false;
-  }
-
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
-
-  wsprintf ( wszRemoteRepoURL,
-               L"/Kaldaien/SpecialK/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
-
-  PCWSTR  rgpszAcceptTypes []         = { L"*/*", nullptr };
-
-  HINTERNET hInetGitHubOpen =
-    HttpOpenRequest ( hInetGitHub,
-                        nullptr,
-                          wszRemoteRepoURL,
-                            L"HTTP/1.1",
-                              nullptr,
-                                rgpszAcceptTypes,
-                                  INTERNET_FLAG_MAKE_PERSISTENT   | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID |
-                                  INTERNET_FLAG_CACHE_IF_NET_FAIL | INTERNET_FLAG_IGNORE_CERT_CN_INVALID   |
-                                  INTERNET_FLAG_RESYNCHRONIZE     | INTERNET_FLAG_CACHE_ASYNC              |
-                                  INTERNET_FLAG_NEED_FILE,
-                                    (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetGitHubOpen) {
-    InternetCloseHandle (hInetGitHub);
-    InternetCloseHandle (hInetRoot);
-    return false;
-  }
-
-  if ( HttpSendRequestW ( hInetGitHubOpen,
-                            nullptr,
-                              0,
-                                nullptr,
-                                  0 ) ) {
-    DWORD dwSize;
-
-    if ( InternetQueryDataAvailable ( hInetGitHubOpen,
-                                        &dwSize,
-                                          0x00, NULL )
-      )
-    {
-      DWORD dwAttribs = GetFileAttributes (product.wszWrapper);
-
-      if (dwAttribs == INVALID_FILE_ATTRIBUTES)
-        dwAttribs = FILE_ATTRIBUTE_NORMAL;
-
-      HANDLE hDLLFile =
-        CreateFileW ( product.wszWrapper,
-                        GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE,
-                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                            nullptr,
-                              CREATE_ALWAYS,
-                                dwAttribs |
-                                FILE_FLAG_SEQUENTIAL_SCAN,
-                                  nullptr );
-
-      while (hDLLFile != INVALID_HANDLE_VALUE && dwSize > 0) {
-        DWORD    dwRead = 0;
-        uint8_t *pData  = (uint8_t *)malloc (dwSize);
-
-        if (! pData)
-          break;
-
-        if ( InternetReadFile ( hInetGitHubOpen,
-                                  pData,
-                                    dwSize,
-                                      &dwRead )
-          )
-        {
-          DWORD dwWritten;
-
-          WriteFile ( hDLLFile,
-                        pData,
-                          dwRead,
-                            &dwWritten,
-                              nullptr );
-        }
-
-        free (pData);
-        pData = nullptr;
-
-        if (! InternetQueryDataAvailable ( hInetGitHubOpen,
-                                             &dwSize,
-                                               0x00, NULL
-                                         )
-           ) break;
-      }
-
-      if (hDLLFile != INVALID_HANDLE_VALUE)
-        CloseHandle (hDLLFile);
-    }
-
-    //HttpEndRequest ( hInetGitHubOpen, nullptr, 0x00, 0 );
-  }
-
-  InternetCloseHandle (hInetGitHubOpen);
-  InternetCloseHandle (hInetGitHub);
-  InternetCloseHandle (hInetRoot);
-
-  return true;
-}
-
-bool
-__stdcall
-SKIM_FetchInstaller32 ( sk_product_t product )
-{
-  return SKIM_FetchInstallerDLL ( product, L"installer.dll" );
-}
-
-bool
-__stdcall
-SKIM_FetchInstaller64 ( sk_product_t product )
-{
-  return SKIM_FetchInstallerDLL ( product, L"installer64.dll" );
-}
-
-
-
-bool
-__stdcall
-SKIM_FetchInjector32 ( sk_product_t product )
-{
-  return SKIM_FetchInjectorDLL ( product, L"0.8.x/injector.dll" );
-}
-
-bool
-__stdcall
-SKIM_FetchInjector64 ( sk_product_t product )
-{
-  return SKIM_FetchInjectorDLL ( product, L"0.8.x/injector64.dll" );
 }
 
 
 
 
+
+
 bool
-SKIM_TestKB2533623 (SK_ARCHITECTURE arch)
+SKIM_Depends_TestKB2533623 (SK_ARCHITECTURE arch)
 {
   return GetProcAddress (GetModuleHandle (L"kernel32.dll"), "AddDllDirectory") != nullptr;
 }
@@ -1333,7 +841,7 @@ SKIM_TestKB2533623 (SK_ARCHITECTURE arch)
 #pragma comment (lib, "msi.lib")
 
 bool
-SKIM_TestVisualCRuntime (SK_ARCHITECTURE arch)
+SKIM_Depends_TestVisualCRuntime (SK_ARCHITECTURE arch)
 {
   if (arch == SK_64_BIT)
   {
@@ -1378,8 +886,8 @@ SKIM_TestVisualCRuntime (SK_ARCHITECTURE arch)
   }
 
   else {/* if (arch == SK_BOTH_BIT) {*/
-    return SKIM_TestVisualCRuntime (SK_32_BIT) &&
-           SKIM_TestVisualCRuntime (SK_64_BIT);
+    return SKIM_Depends_TestVisualCRuntime (SK_32_BIT) &&
+           SKIM_Depends_TestVisualCRuntime (SK_64_BIT);
   }
 }
 
@@ -1481,19 +989,19 @@ SKIM_UninstallProduct (LPVOID user)
 
   ShowWindow (parent_dlg, SW_HIDE);
 
-  SetCurrentDirectory (SKIM_FindInstallPath (product->uiSteamAppID));
+  if (product->uiSteamAppID == 0) {
+    SKIM_DisableGlobalInjector ();
+  }
 
-  DeleteFileW (product->wszWrapper);
-  DeleteFileW (product->wszPlugIn);
+  SetCurrentDirectory (SKIM_FindInstallPath (product->uiSteamAppID));
 
   SKIM_DeleteConfigFiles (product);
 
   DeleteFileW (L"Version\\installed.ini");
   DeleteFileW (L"Version\\repository.ini");
 
-  if (product->uiSteamAppID == 0) {
-    SKIM_DisableGlobalInjector ();
-  }
+  DeleteFileW (product->wszWrapper);
+  DeleteFileW (product->wszPlugIn);
 
   wchar_t wszUninstall [256];
   wsprintf ( wszUninstall, L"%s has been successfully uninstalled.",
@@ -1557,7 +1065,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  if (! SKIM_TestKB2533623 (SK_BOTH_BIT) )
+  if (! SKIM_Depends_TestKB2533623 (SK_BOTH_BIT) )
   {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -1619,7 +1127,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  if (! SKIM_TestVisualCRuntime (SK_BOTH_BIT) )
+  if (! SKIM_Depends_TestVisualCRuntime (SK_BOTH_BIT) )
   {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -1837,8 +1345,6 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
         SK_FetchVersionInfo (product.wszRepoName);
         SK_UpdateSoftware   (product.wszRepoName);
       }
-
-      FreeLibrary (hModInstaller);
     }
 
     if (! child)
@@ -1850,7 +1356,6 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
 
     else
     {
-      
       SendMessage         (hWndMainDlg, WM_CLOSE, 0x00, 0x00);
       SendMessage         (hWndMainDlg, WM_QUIT,  0x00, 0x00);
     }
@@ -1873,6 +1378,8 @@ unsigned int
 __stdcall
 SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 {
+  static int tries = 0;
+
   sk_product_t& product = *(sk_product_t *)user;
 
   // Disable installation of FO4W
@@ -1881,7 +1388,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     return 0;
   }
 
-  if (! SKIM_TestKB2533623 (SK_BOTH_BIT) )
+  if (! SKIM_Depends_TestKB2533623 (SK_BOTH_BIT) )
   {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -1947,7 +1454,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   if (product.architecture == SK_32_BIT)
     arch = SK_BOTH_BIT;
 
-  if (! SKIM_TestVisualCRuntime (arch) )
+  if (! SKIM_Depends_TestVisualCRuntime (arch) )
   {
     int               nButtonPressed = 0;
     TASKDIALOGCONFIG  config         = {0};
@@ -2181,8 +1688,19 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
     }
   }
 
+  // Give a second try, in case internet cache went kaput
+  else if (tries == 0)
+  {
+    ++tries;
+    DeleteFileW (wszInstallerDLL);
+    SKIM_InstallProduct (user);
+  }
+  
+
+  // Too many tries, give up.
   else
   {
+    tries = 0;
     DeleteFileW (wszInstallerDLL);
     MessageBoxW (NULL, L"Something went wrong attempting to download Installer DLL.", L"Install Failed", MB_OK | MB_ICONERROR);
   }
@@ -2228,7 +1746,7 @@ SKIM_DetermineInstallState (sk_product_t& product)
              uint32_t dwLen = MAX_PATH;
     wchar_t wszSpecialK_ROOT [MAX_PATH] = { };
 
-    SKIM_GetDocumentsDir (wszSpecialK_ROOT, &dwLen);
+    SKIM_Util_GetDocumentsDir (wszSpecialK_ROOT, &dwLen);
 
     PathAppend (wszSpecialK_ROOT, L"My Mods\\SpecialK");
     PathAppend (wszSpecialK_ROOT, product.wszWrapper);
@@ -2301,7 +1819,7 @@ SKIM_DetermineInstallState (sk_product_t& product)
 }
 
 std::wstring
-SKIM_SummarizeRenderAPI (sk_product_t product)
+SKIM_SummarizeRenderAPI (sk_product_t& product)
 {
   std::wstring ret = L"";
 
@@ -2481,34 +1999,6 @@ SKIM_OnBranchSelect (void)
 
 HWND hWndRichProductDescrip;
 
-// 0 = Removed
-// 1 = Installed
-int
-SKIM_GetInjectorState (void)
-{
-#ifdef _WIN64
-  HMODULE hMod = LoadLibrary (L"SpecialK64.dll");
-#else
-  HMODULE hMod = LoadLibrary (L"SpecialK32.dll");
-#endif
-
-  typedef bool   (WINAPI *SKX_IsHookingCBT_pfn)   (void);
-  
-  if (hMod != NULL)
-  {
-    SKX_IsHookingCBT_pfn SKX_IsHookingCBT =
-      (SKX_IsHookingCBT_pfn)GetProcAddress   (hMod, "SKX_IsHookingCBT");
-
-    int ret = SKX_IsHookingCBT () ? 1 : 0;
-
-    FreeLibrary (hMod);
-  
-    return ret;
-  }
-
-  return 0;
-}
-
 void
 SKIM_OnProductSelect (void)
 {
@@ -2608,403 +2098,43 @@ SKIM_OnProductSelect (void)
   SKIM_OnBranchSelect ();
 }
 
-HMODULE hModGlobal = 0;//LoadLibrary (L"SpecialK64.dll");
-
-typedef void   (WINAPI *SKX_InstallCBTHook_pfn)  (void);
-typedef void   (WINAPI *SKX_RemoveCBTHook_pfn)   (void);
-typedef bool   (WINAPI *SKX_IsHookingCBT_pfn)    (void);
-typedef size_t (WINAPI *SKX_GetInjectedPIDs_pfn) (DWORD*, size_t);
-
-SKX_RemoveCBTHook_pfn   SKX_RemoveCBTHook   = nullptr;
-SKX_InstallCBTHook_pfn  SKX_InstallCBTHook  = nullptr;
-SKX_IsHookingCBT_pfn    SKX_IsHookingCBT    = nullptr;
-SKX_GetInjectedPIDs_pfn SKX_GetInjectedPIDs = nullptr;
-
-static NOTIFYICONDATAW sys_tray_icon = { };
-
-static HMENU hTrayMenu       = 0;
-
-HMODULE
-SKIM_GlobalInject_Load (void)
-{
-  if (hModGlobal == 0)
-    hModGlobal = LoadLibraryW (L"SpecialK64.dll");
-
-  if (hModGlobal != 0)
-  {
-    SKX_RemoveCBTHook   = (SKX_RemoveCBTHook_pfn)
-      GetProcAddress      (hModGlobal, "SKX_RemoveCBTHook");
-
-    SKX_InstallCBTHook  = (SKX_InstallCBTHook_pfn)
-      GetProcAddress      (hModGlobal, "SKX_InstallCBTHook");
-
-    SKX_IsHookingCBT    = (SKX_IsHookingCBT_pfn)
-      GetProcAddress      (hModGlobal, "SKX_IsHookingCBT");
-
-    SKX_GetInjectedPIDs = (SKX_GetInjectedPIDs_pfn)
-      GetProcAddress      (hModGlobal, "SKX_GetInjectedPIDs");
-  }
-
-  return hModGlobal;
-}
-
-BOOL
-SKIM_GlobalInject_Free (void)
-{
-  if (hModGlobal != 0)
-  {
-    if (FreeLibrary (hModGlobal))
-      hModGlobal = 0;
-  }
-
-  if (hModGlobal == 0)
-  {
-    SKX_RemoveCBTHook   = nullptr;
-    SKX_InstallCBTHook  = nullptr;
-    SKX_IsHookingCBT    = nullptr;
-    SKX_GetInjectedPIDs = nullptr;
-  }
-
-  if (hModGlobal == 0)
-    return TRUE;
-
-  while (! FreeLibrary (hModGlobal))
-      ;
-
-  hModGlobal = 0;
-
-  return TRUE;
-}
-
 bool
-SKIM_GlobalInject_Start (void)
+SKIM_ConfirmClose (void)
 {
-  if (SKIM_GlobalInject_Load ())
+  if (SKIM_GetInjectorState ())
   {
-    if (! SKX_IsHookingCBT ())
-    {
-      SKX_InstallCBTHook ();
+    int               nButtonPressed =  0;
+    TASKDIALOGCONFIG  config         = { };
   
-      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
-        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Install", nullptr, SW_HIDE );
+    config.cbSize             = sizeof (config);
+    config.hInstance          = g_hInstance;
+    config.hwndParent         = GetActiveWindow ();
+    config.pszWindowTitle     = L"Special K Install Manager";
+    config.dwCommonButtons    = TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
+    config.pszMainInstruction = L"Closing SKIM Will Stop Injection";
+    config.pButtons           = nullptr;
+    config.cButtons           = 0;
+    config.nDefaultButton     = IDCANCEL;
+  
+    config.dwFlags            = /*TDF_SIZE_TO_CONTENT*/0x00;
+    config.pszMainIcon        = TD_WARNING_ICON;
+  
+    config.pszContent         = L"Any software using Special K will continue, "
+                                L"however, injection into new applications will cease.";
 
-      if (SKX_IsHookingCBT ())
-        return true;
-    }
-
-    else
+    config.pszFooter          = L"Minimizing SKIM will remove it from the task bar.";
+    //config.pszFooterIcon      = L"SKIM64.exe:1";
+  
+    TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
+  
+    if ( nButtonPressed == IDCANCEL )
+    {
       return false;
-  }
-
-  return false;
-}
-
-bool
-SKIM_GlobalInject_Stop (bool confirm = true)
-{
-  if (SKIM_GlobalInject_Load ())
-  {
-    if (SKX_IsHookingCBT ())
-    {
-      std::wstring confirmation = L"";
-
-      if (confirm && SKIM_SummarizeInjectedPIDs (confirmation))
-      {
-        int               nButtonPressed =   0;
-        TASKDIALOGCONFIG  config         = { 0 };
-
-        config.cbSize             = sizeof (config);
-        config.hInstance          = g_hInstance;
-        config.hwndParent         = GetActiveWindow ();
-        config.pszWindowTitle     = L"Special K Install Manager";
-        config.dwCommonButtons    = TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
-        config.pszMainInstruction = L"Software May Crash if Injection Stops";
-        config.pButtons           = nullptr;
-        config.cButtons           = 0;
-        config.nDefaultButton     = IDCANCEL;
-
-        config.dwFlags            = TDF_SIZE_TO_CONTENT;
-        config.pszMainIcon        = TD_WARNING_ICON;
-
-        config.pszContent         = confirmation.c_str ();
-
-        TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
-
-        if ( nButtonPressed == IDCANCEL )
-        {
-          return false;
-        }
-      }
-
-      SKX_RemoveCBTHook ();
-  
-      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
-        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Remove", nullptr, SW_HIDE );
-
-      //if (! SKX_IsHookingCBT ())
-        return true;
-
-      //return false;
     }
-
-    else
-      return true;
   }
 
   return true;
 }
-
-bool
-SKIM_GlobalInject_Stop (HWND hWndDlg, bool confirm = true)
-{
-  MENUITEMINFOW minfo_start,
-                minfo_stop;
-
-  minfo_start.cbSize = sizeof MENUITEMINFOW;
-  minfo_stop.cbSize  = sizeof MENUITEMINFOW;
-
-  GetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-  GetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-
-  if (SKIM_GlobalInject_Stop (confirm))
-  {
-    SetWindowText (GetDlgItem (hWndDlg, IDC_MANAGE_CMD), L"Start Injecting");
-
-    minfo_start.fMask  = MIIM_STATE;
-    minfo_start.fState = MFS_UNCHECKED | MFS_ENABLED;
-    
-    SetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-    
-    minfo_stop.fMask  = MIIM_STATE;
-    minfo_stop.fState = MFS_CHECKED | MFS_DISABLED;
-    
-    SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-
-    return true;
-  }
-
-  return false;
-}
-
-bool
-SKIM_GlobalInject_Start (HWND hWndDlg)
-{
-  MENUITEMINFOW minfo_start,
-                minfo_stop;
-
-  minfo_start.cbSize = sizeof MENUITEMINFOW;
-  minfo_stop.cbSize  = sizeof MENUITEMINFOW;
-
-  GetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-  GetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-
-
-  if (SKIM_GlobalInject_Start ())
-  {
-    SetWindowText (GetDlgItem (hWndDlg, IDC_MANAGE_CMD), L"Stop Injecting");
-
-    minfo_start.fMask  = MIIM_STATE;
-    minfo_start.fState = MFS_CHECKED | MFS_DISABLED;
-
-    SetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-
-    minfo_stop.fMask  = MIIM_STATE;
-    minfo_stop.fState = MFS_UNCHECKED | MFS_ENABLED;
-
-    SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-
-    return true;
-  }
-
-  return false;
-}
-
-bool
-SKIM_GlobalInject_StartStop (HWND hWndDlg, bool confirm = true)
-{
-  if (SKIM_GetInjectorState ())
-  {
-    return SKIM_GlobalInject_Stop (hWndDlg, confirm);
-  }
-
-  else
-  {
-    return SKIM_GlobalInject_Start (hWndDlg);
-  }
-}
-
-size_t
-SKIM_SummarizeInjectedPIDs (std::wstring& out)
-{
-  int count = SKX_GetInjectedPIDs ?
-                SKX_GetInjectedPIDs (nullptr, 0) : 0;
-
-  DWORD*  dwPIDs                 = nullptr;
-  wchar_t wszFileName [MAX_PATH] = { };
-
-  if (SKX_GetInjectedPIDs)
-  {
-    dwPIDs =
-      new DWORD [count + 1] { };
-
-    SKX_GetInjectedPIDs (dwPIDs, count + 1);
-
-    for (int i = 0; i < count; i++)
-    {
-      HANDLE hProc =
-        OpenProcess ( PROCESS_QUERY_INFORMATION,
-                        FALSE,
-                          dwPIDs [i] );
-
-      if (hProc != NULL)
-      {
-        DWORD dwLen = MAX_PATH;
-        QueryFullProcessImageName (hProc, 0x0, wszFileName, &dwLen);
-
-        PathStripPath (wszFileName);
-
-        out += L"\n  ";
-        out += wszFileName;
-
-        CloseHandle (hProc);
-      }
-    }
-
-    delete [] dwPIDs;
-  }
-
-  return count;
-}
-
-HICON
-SKIM_GetSmallStockIcon (SHSTOCKICONID siid)
-{
-  SHSTOCKICONINFO sii = { 0 };
-           sii.cbSize = sizeof (sii);
-
-  SHGetStockIconInfo ( siid,
-                         SHGSI_ICON | SHGSI_SMALLICON | SHGFI_SELECTED,
-                           &sii );
-
-  return sii.hIcon;
-}
-
-#pragma comment (lib, "gdiplus.lib")
-
-void
-SKIM_RefreshTrayMenu (HWND hWndDlg, bool add = false)
-{
-  sys_tray_icon.hIcon        = hIconSKIM_Tray;
-  sys_tray_icon.hBalloonIcon = hIconSKIM_Tray;
-  sys_tray_icon.hWnd         = hWndDlg;
-  sys_tray_icon.guidItem     = SKIM_SystemTray_UUID;
-  sys_tray_icon.uFlags      |= NIF_ICON | NIF_TIP | NIF_MESSAGE |
-                               /*NIF_INFO |*/ NIF_GUID | NIF_SHOWTIP;
-
-  //wcscpy (sys_tray_icon.szInfoTitle, L"Special K Install Manager ");
-  //wcscat (sys_tray_icon.szInfoTitle, SKIM_VERSION_STR_W);
-
-  sys_tray_icon.uCallbackMessage = WM_USER | 0x0420;
-  sys_tray_icon.uVersion         = NOTIFYICON_VERSION;
-  sys_tray_icon.dwInfoFlags     |= NIIF_INFO | NIIF_LARGE_ICON | NIIF_RESPECT_QUIET_TIME;
-
-
-  static std::wstring inject_summary;
-  inject_summary = L"";
-
-  int count =
-    SKIM_SummarizeInjectedPIDs (inject_summary);
-
-  if (count == 0)
-    inject_summary += L"Special K Install Manager v " SKIM_VERSION_STR_W;
-  else
-  {
-    inject_summary = std::wstring (L"Global Injection (SpecialK64.dll)") + inject_summary;
-  }
-
-  wcsncpy (sys_tray_icon.szTip, inject_summary.c_str (), 127);
-
-  //static HICON hIconExit  = 0;
-  //static HICON hIconStart = 0;
-  //static HICON hIconStop  = 0;
-  //static HICON hIconGlobe = 0;
-  //
-  //auto LoadAndApplyIcon = [](SHSTOCKICONID siid, int idx, HMENU hMenu) ->
-  //HICON
-  //{
-  //  HICON         hIcon = SKIM_GetSmallStockIcon (siid);
-  //  MENUITEMINFOW minfo;
-  //
-  //  minfo.cbSize = sizeof MENUITEMINFOW;
-  //
-  //  GetMenuItemInfoW (hMenu, idx, TRUE, &minfo);
-  //
-  //  minfo.fMask    = MIIM_BITMAP | MIIM_FTYPE;
-  //  minfo.fType    = MFT_STRING;
-  //
-  //  ICONINFOEX ici;
-  //  ici.cbSize = sizeof ICONINFOEX;
-  //  
-  //  GetIconInfoEx (hIcon, &ici);
-  //  minfo.hbmpItem = ici.hbmColor;
-  //
-  //  SetMenuItemInfoW (hMenu, idx, TRUE, &minfo);
-  //
-  //  return hIcon;
-  //};
-  //
-  //if (hIconExit  == 0) { hIconExit  = LoadAndApplyIcon (SIID_DELETE,   5, hTrayMenu); }
-  //if (hIconStart == 0) { hIconStart = LoadAndApplyIcon (SIID_SLOWFILE, 2, hTrayMenu); }
-  //if (hIconStop  == 0) { hIconStop  = LoadAndApplyIcon (SIID_ERROR,    3, hTrayMenu); }
-  //if (hIconGlobe == 0) { hIconGlobe = LoadAndApplyIcon (SIID_WORLD,    1, hTrayMenu); }
-
-
-  if (add)
-    Shell_NotifyIcon (NIM_ADD,      &sys_tray_icon);
-  else
-    Shell_NotifyIcon (NIM_MODIFY,   &sys_tray_icon);
-
-
-  Shell_NotifyIcon (NIM_SETVERSION, &sys_tray_icon);
-
-
-  RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
-}
-
-void
-SKIM_SendToTray (HWND hWndDlg)
-{
-  SKIM_RefreshTrayMenu (hWndDlg, true);
-
-  ShowWindow   (hWndDlg, SW_HIDE);
-  RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
-}
-
-void
-SKIM_RestoreFromTray (HWND hWndDlg)
-{
-  Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
-
-  ShowWindow (hWndDlg, SW_RESTORE);
-}
-
-void
-SKIM_StopInjectingAndExit (HWND hWndDlg, bool confirm = true)
-{
-  if (SKIM_GetInjectorState ())
-  {
-    SKIM_GlobalInject_Stop (hWndDlg, confirm);
-  }
-
-  Shell_NotifyIcon (NIM_DELETE, &sys_tray_icon);
-  ExitProcess      (0x00);
-}
-
-enum {
-  SKIM_STOP_INJECTION          = WM_USER + 0x122,
-  SKIM_STOP_INJECTION_AND_EXIT = WM_USER + 0x123,
-  SKIM_START_INJECTION         = WM_USER + 0x124
-};
 
 INT_PTR
 CALLBACK
@@ -3040,72 +2170,13 @@ Main_DlgProc (
 
         InitCommonControlsEx (&icex);
 
-        if (hTrayMenu == 0)
-        {
-          hTrayMenu       = CreatePopupMenu ();
-
-          MENUINFO minfo;
-
-          minfo.cbSize = sizeof MENUINFO;
-          minfo.fMask  = MIM_STYLE;
-
-          GetMenuInfo (hTrayMenu, &minfo);
-
-          minfo.dwStyle |= MNS_NOTIFYBYPOS;
-          minfo.fMask    = MIM_STYLE;
-
-          SetMenuInfo (hTrayMenu, &minfo);
-  
-          InsertMenuW (hTrayMenu, 0, MF_BYPOSITION | MF_STRING   |
-                                     MF_MENUBREAK  | MF_DISABLED |
-                                     MF_GRAYED,                   0, L" ");//SKIM Task Manager");
-          InsertMenuW (hTrayMenu, 1, MF_BYPOSITION | MF_DISABLED, 0, L"Global Injection" );
-
-          InsertMenuW (hTrayMenu, 2, MF_BYCOMMAND | MF_STRING,    2, L"  Start");
-          InsertMenuW (hTrayMenu, 3, MF_BYCOMMAND | MF_STRING,    3, L"  Stop");
-
-          InsertMenuW (hTrayMenu, 4, MF_SEPARATOR,                0, nullptr);
-          InsertMenuW (hTrayMenu, 5, MF_BYCOMMAND | MF_STRING,    5, L"Exit");
-
-          MENUITEMINFOW minfo_start,
-                        minfo_stop;
-
-          minfo_start.cbSize = sizeof MENUITEMINFOW;
-          minfo_stop.cbSize  = sizeof MENUITEMINFOW;
-
-          GetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-          GetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-
-          if (SKIM_GetInjectorState ())
-          {
-            minfo_start.fMask  = MIIM_STATE;
-            minfo_start.fState = MFS_CHECKED | MFS_DISABLED;
-
-            SetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-
-            minfo_stop.fMask  = MIIM_STATE;
-            minfo_stop.fState = MFS_UNCHECKED | MFS_ENABLED;
-
-            SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-          }
-
-          else
-          {
-            minfo_start.fMask  = MIIM_STATE;
-            minfo_start.fState = MFS_UNCHECKED | MFS_ENABLED;
-
-            SetMenuItemInfoW (hTrayMenu, 2, TRUE, &minfo_start);
-
-            minfo_stop.fMask  = MIIM_STATE;
-            minfo_stop.fState = MFS_CHECKED | MFS_DISABLED;
-
-            SetMenuItemInfoW (hTrayMenu, 3, TRUE, &minfo_stop);
-          }
-        }
+        SKIM_Tray_Init (hWndDlg);
 
         LoadLibrary (L"msftedit.dll");
 
         CoInitializeEx (nullptr, COINIT_MULTITHREADED);
+
+        SKIM_Tray_UpdateStartup ();
 
         init = true;
       }
@@ -3377,17 +2448,19 @@ Main_DlgProc (
     case WM_CLOSE:
     case WM_DESTROY:
     {
-      if (SKIM_GlobalInject_Stop ())
+      if (SKIM_ConfirmClose ())
       {
-        Shell_NotifyIcon          (NIM_DELETE, &sys_tray_icon);
-        SKIM_StopInjectingAndExit (hWndDlg);
+        if (SKIM_GlobalInject_Stop ())
+        {
+          SKIM_Tray_RemoveFrom      (       );
+          SKIM_StopInjectingAndExit (hWndDlg);
 
-        TerminateProcess (GetCurrentProcess (), 0x00);
-        ExitProcess      (                      0x00);
+          TerminateProcess (GetCurrentProcess (), 0x00);
+          ExitProcess      (                      0x00);
+        }
       }
 
-      else
-        return 1;
+      return 1;
     } break;
 
     case SKIM_STOP_INJECTION:
@@ -3413,7 +2486,7 @@ Main_DlgProc (
 
     case (WM_USER | 0x0420):
     {
-      SKIM_RefreshTrayMenu (hWndDlg);
+      SKIM_Tray_RefreshMenu (hWndDlg);
 
       switch (LOWORD (lParam))
       {
@@ -3425,25 +2498,12 @@ Main_DlgProc (
 
         case WM_LBUTTONDOWN:
         case WM_LBUTTONUP:
-          SKIM_RestoreFromTray (hWndDlg);
+          SKIM_Tray_RestoreFrom (hWndDlg);
           break;
 
         case WM_CONTEXTMENU:
         {
-          // Show that thing!
-          SetForegroundWindow (hWndDlg);
-  
-          // get Mouse Position
-          POINT pt;
-          GetCursorPos (&pt);
-  
-          // Show Menu
-          TrackPopupMenu ( hTrayMenu,
-                             TPM_LEFTALIGN | TPM_LEFTBUTTON |
-                             TPM_VERNEGANIMATION,
-                               pt.x, pt.y,
-                                 0,
-                                   hWndDlg, nullptr );
+          SKIM_Tray_HandleContextMenu (hWndDlg);
         }
         break;
       }
@@ -3453,41 +2513,7 @@ Main_DlgProc (
 
     case WM_MENUCOMMAND:
     {
-      if ((HMENU)lParam == hTrayMenu)
-      {
-        // Magic Numbers Suck, STOP THIS!
-        //
-        switch (LOWORD (wParam))
-        {
-          case 0:
-          {
-          } break;
-
-          // Start
-          case 2:
-          {
-            SKIM_GlobalInject_Start (hWndDlg);
-          } break;
-
-          // Stop
-          case 3:
-          {
-            SKIM_GlobalInject_Stop (hWndDlg);
-          } break;
-
-          // Exit
-          case 5:
-          {
-            if (SKIM_GlobalInject_Stop (hWndDlg))
-              SKIM_StopInjectingAndExit (hWndDlg);
-          } break;
-
-          // INVALID
-          default:
-          {
-          } break;
-        }
-      }
+      SKIM_Tray_ProcessCommand (hWndDlg, lParam, wParam);
 
       return (INT_PTR)false;
     } break;
@@ -3496,12 +2522,12 @@ Main_DlgProc (
     {
       if      (wParam == SIZE_MINIMIZED)
       {
-        SKIM_SendToTray (hWndDlg);
+        SKIM_Tray_SendTo (hWndDlg);
       }
 
       else if (wParam == SIZE_RESTORED)
       {
-        SKIM_RestoreFromTray (hWndDlg);
+        SKIM_Tray_RestoreFrom (hWndDlg);
       }
 
       return (INT_PTR)false;
@@ -3526,13 +2552,17 @@ SKIM_FindProductByAppID (uint32_t appid)
   return nullptr;
 }
 
-#include "winbase.h"
-
 void
 SKIM_DisableGlobalInjector (void)
 {
   SKIM_GlobalInject_Stop (false);
   SKIM_GlobalInject_Free ();
+
+  // Wait for uninjection to finish (the stupid way)
+  int iters = 0;
+  while (GetFileAttributes (L"SpecialK32.pid") != INVALID_FILE_ATTRIBUTES && iters < 4) {
+    Sleep (150UL); ++iters;
+  }
 
   time_t _time;
   time (&_time);
@@ -3587,16 +2617,16 @@ SKIM_MigrateGlobalInjector (LPVOID user)
   wchar_t wszDestDLL64 [MAX_PATH] = { };
 
   uint32_t dwStrLen = MAX_PATH;
-  SKIM_GetDocumentsDir (wszDestDLL32, &dwStrLen);
+  SKIM_Util_GetDocumentsDir (wszDestDLL32, &dwStrLen);
 
   dwStrLen = MAX_PATH;
-  SKIM_GetDocumentsDir (wszDestDLL64, &dwStrLen);
+  SKIM_Util_GetDocumentsDir (wszDestDLL64, &dwStrLen);
 
   PathAppend (wszDestDLL32, L"My Mods\\SpecialK\\");
   PathAppend (wszDestDLL64, L"My Mods\\SpecialK\\");
 
   // Create the destination directory
-  SKIM_CreateDirectories (wszDestDLL32);
+  SKIM_Util_CreateDirectories (wszDestDLL32);
 
   SetCurrentDirectoryW (wszDestDLL32);
 
@@ -3706,16 +2736,16 @@ SKIM_InstallGlobalInjector (LPVOID user)
   wchar_t wszDestDLL64 [MAX_PATH] = {  };
 
   uint32_t dwStrLen = MAX_PATH;
-  SKIM_GetDocumentsDir (wszDestDLL32, &dwStrLen);
+  SKIM_Util_GetDocumentsDir (wszDestDLL32, &dwStrLen);
 
   dwStrLen = MAX_PATH;
-  SKIM_GetDocumentsDir (wszDestDLL64, &dwStrLen);
+  SKIM_Util_GetDocumentsDir (wszDestDLL64, &dwStrLen);
 
-  PathAppend (wszDestDLL32, L"My Mods\\SpecialK\\");
-  PathAppend (wszDestDLL64, L"My Mods\\SpecialK\\");
+  PathAppend (wszDestDLL32, L"My Mods\\SpecialK");
+  PathAppend (wszDestDLL64, L"My Mods\\SpecialK");
 
   // Create the destination directory
-  SKIM_CreateDirectories (wszDestDLL32);
+  SKIM_Util_CreateDirectories (wszDestDLL32);
 
   wchar_t wszDestInstaller [MAX_PATH] = { };
   lstrcatW (wszDestInstaller, wszDestDLL32);
@@ -3738,13 +2768,8 @@ SKIM_InstallGlobalInjector (LPVOID user)
                    L"\tPlease run it from there from now on",
                      L"Installer Moved",
                        MB_OK | MB_ICONINFORMATION );
+    TerminateProcess (GetCurrentProcess (), 0x0);
   }
-
-  MessageBox ( NULL,
-                 L"The Global Version of Special K is Partially Installed\r\n\r\n"
-                 L"\tLaunch a Steam Game to Finish Setup",
-                   L"Global Injection Installation Pending",
-                     MB_OK | MB_ICONINFORMATION );
 
   SetCurrentDirectoryW (wszDestDLL32);
   wcscpy               (startup_dir, wszDestDLL32);
@@ -3836,21 +2861,46 @@ SKIM_InstallGlobalInjector (LPVOID user)
       if ( SK_FetchVersionInfo != nullptr &&
            SK_UpdateSoftware   != nullptr )
       {
-        SK_FetchVersionInfo (sk64.wszRepoName);
-        SK_UpdateSoftware   (sk64.wszRepoName);
+        ShowWindow  ((HWND)hWndParent, SW_HIDE);
+
+        SK_FetchVersionInfo (L"SpecialK");
+        //SK_UpdateSoftware   (L"SpecialK");
+        {
+          int               nButtonPressed = 0;
+          TASKDIALOGCONFIG  config         = {0};
+
+          config.cbSize              = sizeof (config);
+          config.hInstance           = g_hInstance;
+          config.hwndParent          = hWndParent;
+          config.pszWindowTitle      = L"Special K Install Manager";
+          config.dwCommonButtons     = 0;//TDCBF_OK_BUTTON;
+          config.pszMainInstruction  = L"Setup of Global Injector Successful";
+          config.pButtons            = nullptr;
+          config.cButtons            = 0;
+          config.pszContent          = L"Installation will complete when you "
+                                       L"run a Steam game.";
+          config.pszFooterIcon       = TD_SHIELD_ICON;
+          config.pszFooter           = L"Compatibility Menu:   HOLD "
+                                       L"Ctrl + Shift at game startup.";
+          config.pszMainIcon         = TD_INFORMATION_ICON;
+          config.pszVerificationText = L"Start With Windows";
+          config.dwFlags             = TDF_VERIFICATION_FLAG_CHECKED;
+
+          BOOL bStartWithWindows = TRUE;
+
+          TaskDialogIndirect (&config, &nButtonPressed, nullptr, &bStartWithWindows);
+
+          SKIM_SetStartupInjection (bStartWithWindows, wszDestInstaller);
+          SKIM_GlobalInject_Start  ();
+        }
+
+        ShowWindow  ((HWND)hWndParent, SW_SHOW);
+        SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
       }
 
-      FreeLibrary (hModInstaller);
+      //FreeLibrary (hModInstaller);
     }
   }
-
-
-
-  ShowWindow  ((HWND)hWndParent, SW_SHOW);
-  SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
-
-  SKIM_GlobalInject_Start ();
-
 
   SKIM_OnProductSelect          ();
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
@@ -3870,7 +2920,6 @@ wWinMain ( _In_     HINSTANCE hInstance,
   g_hInstance    =                   hInstance;
   hIconSKIM_LG   = (HICON)LoadImage (hInstance, MAKEINTRESOURCE (IDI_ICON1), IMAGE_ICON, 128, 128, 0x00);
   hIconSKIM_SM   =        LoadIcon  (hInstance, MAKEINTRESOURCE (IDI_ICON1));
-  hIconSKIM_Tray =        LoadIcon  (hInstance, MAKEINTRESOURCE (IDI_TRAY));
 
   GetCurrentDirectoryW (MAX_PATH, startup_dir);
 
@@ -3919,10 +2968,10 @@ wWinMain ( _In_     HINSTANCE hInstance,
   }
 
 
-  for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
-  {
-    SKIM_DetermineInstallState (products [i]);
-  }
+  //for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
+  //{
+  //  SKIM_DetermineInstallState (products [i]);
+  //}
 
 
   if (injector_action)

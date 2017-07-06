@@ -51,6 +51,9 @@
 
 #include "resource.h"
 
+#include "SKIM.h"
+#include "network.h"
+
 #undef max
 #undef min
 
@@ -1439,92 +1442,6 @@ END:
   return 0;
 }
 
-DWORD
-WINAPI
-HeaderThread (LPVOID user)
-{
-  sk_internet_head_t* head =
-    (sk_internet_head_t *)user;
-
-  HINTERNET hInetRoot =
-    InternetOpen (
-      L"Special K DLC Grabber",
-        INTERNET_OPEN_TYPE_DIRECT,
-          nullptr, nullptr,
-            0x00
-    );
-
-  if (! hInetRoot)
-    goto CLEANUP;
-
-  DWORD dwInetCtx;
-
-  HINTERNET hInetHost =
-    InternetConnect ( hInetRoot,
-                        head->wszHostName,
-                          INTERNET_DEFAULT_HTTP_PORT,
-                            nullptr, nullptr,
-                              INTERNET_SERVICE_HTTP,
-                                0x00,
-                                  (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetHost) {
-    InternetCloseHandle (hInetRoot);
-    goto CLEANUP;
-  }
-
-  PCWSTR rgpszAcceptTypes [] = { L"*/*", nullptr };
-
-  HINTERNET hInetHTTPGetReq =
-    HttpOpenRequest ( hInetHost,
-                        nullptr,
-                          head->wszHostPath,
-                            L"HTTP/1.1",
-                              nullptr,
-                                rgpszAcceptTypes,
-                                  INTERNET_FLAG_NO_UI          | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID |
-                                  INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID,
-                                    (DWORD_PTR)&dwInetCtx );
-
-  if (! hInetHTTPGetReq) {
-    InternetCloseHandle (hInetHost);
-    InternetCloseHandle (hInetRoot);
-    goto CLEANUP;
-  }
-
-  if ( HttpSendRequestW ( hInetHTTPGetReq,
-                            nullptr,
-                              0,
-                                nullptr,
-                                  0 ) ) {
-
-    DWORD dwContentLength     = 0;
-    DWORD dwContentLength_Len = sizeof DWORD;
-
-    HttpQueryInfo ( hInetHTTPGetReq,
-                      HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER,
-                        &dwContentLength,
-                          &dwContentLength_Len,
-                            nullptr );
-
-    head->size = dwContentLength;
-  }
-
-  InternetCloseHandle (hInetHTTPGetReq);
-  InternetCloseHandle (hInetHost);
-  InternetCloseHandle (hInetRoot);
-
-  goto END;
-
-CLEANUP:
-  //head->size = 0;
-
-END:
-  //CloseHandle (GetCurrentThread ());
-
-  return 0;
-}
-
 HWND hWndUpdateDlg = (HWND)INVALID_HANDLE_VALUE;
 
 DWORD
@@ -2388,9 +2305,8 @@ DLC_DlgProc (
 
         files_to_download.pop ();
 
-        extern bool SKIM_CreateDirectories ( const wchar_t* wszPath );
-        SKIM_CreateDirectories (file_to_download.wszAppend);
-        SKIM_CreateDirectories (file_to_download.wszLocalPath);
+        SKIM_Util_CreateDirectories (file_to_download.wszAppend);
+        SKIM_Util_CreateDirectories (file_to_download.wszLocalPath);
 
         if (! wcslen (file_to_download.wszAppend))
           final_validate = true;
