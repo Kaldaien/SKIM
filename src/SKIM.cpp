@@ -284,6 +284,44 @@ SKIM_SteamUtil_GetInstallDir (void)
     return nullptr;
 }
 
+size_t
+SKIM_Util_DeleteTemporaryFiles (const wchar_t* wszPath, const wchar_t* wszPattern)
+{
+  WIN32_FIND_DATA fd;
+  HANDLE          hFind  = INVALID_HANDLE_VALUE;
+  size_t          files  = 0UL;
+  LARGE_INTEGER   liSize = { 0ULL };
+
+  wchar_t wszFindPattern [MAX_PATH * 2] = { };
+
+  lstrcatW (wszFindPattern, wszPath);
+  lstrcatW (wszFindPattern, L"\\");
+  lstrcatW (wszFindPattern, wszPattern);
+
+  hFind = FindFirstFileW (wszFindPattern, &fd);
+
+  if (hFind != INVALID_HANDLE_VALUE)
+  {
+    wchar_t wszFullPath [MAX_PATH * 2 + 1] = { };
+
+    do
+    {
+      if (fd.dwFileAttributes != INVALID_FILE_ATTRIBUTES)
+      {
+        *wszFullPath = L'\0';
+
+        lstrcatW (wszFullPath, wszPath);
+        lstrcatW (wszFullPath, L"\\");
+        lstrcatW (wszFullPath, fd.cFileName);
+
+        if (DeleteFileW (wszFullPath))
+          ++files;
+      }
+    } while (FindNextFileW (hFind, &fd) != 0);
+  }
+
+  return files;
+}
 bool
 SKIM_Util_CreateDirectories ( const wchar_t* wszPath )
 {
@@ -704,7 +742,7 @@ SKIM_IsDLLFromProduct (const wchar_t* wszName, const wchar_t* wszProductName)
                         (LPVOID *)&wszProduct,
                                   &cbProductBytes );
 
-    return (cbProductBytes && (! wcsicmp (wszProduct, wszProductName)));
+    return (cbProductBytes && (! wcscmp (wszProduct, wszProductName)));
   }
 
   return false;
@@ -1053,7 +1091,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
   sk_product_t* product = (sk_product_t *)user;
 
   // Disable installation of FO4W
-  if ( product->uiSteamAppID == 377160 ) {
+  if ( product->uiSteamAppID == 377160 )
+  {
     CloseHandle (GetCurrentThread ());
     return 0;
   }
@@ -1164,32 +1203,15 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
 
     config.pszMainIcon        = TD_ERROR_ICON;
 
-#if 0
-    if (product.architecture == SK_32_BIT) {
-      config.pszContent       = L"Please grab the x86"
-                                L" version from <a href=\""
-                                L"https://go.microsoft.com/fwlink/?LinkId=746571"
-                                L"\">here</a>"
-                                L" to continue.";
-    } else if (product.architecture == SK_64_BIT) {
-      config.pszContent       = L"Please grab the x64"
-                                L" version from <a href=\""
-                                L"https://go.microsoft.com/fwlink/?LinkId=746572"
-                                L"\">here</a>"
-                                L" to continue.";
-    } else {
-#endif
-      config.pszContent       = L"Please grab _BOTH_, the x86 and x64 "
+    config.pszContent         = L"Please grab _BOTH_, the x86 and x64 "
                                 L"versions from <a href=\""
                                 L"https://go.microsoft.com/fwlink/?LinkId=746571"
                                 L"\">here (x86)</a> and <a href=\""
                                 L"https://go.microsoft.com/fwlink/?LinkId=746572"
                                 L"\">here (x64)</a> to continue.";
-#if 0
-    }
-#endif
 
     TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
+
     return 0;
   }
 
@@ -1676,7 +1698,8 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
                         "SK_FetchVersionInfo" );
 
     if ( SK_FetchVersionInfo != nullptr &&
-         SK_UpdateSoftware   != nullptr ) {
+         SK_UpdateSoftware   != nullptr )
+    {
       SK_FetchVersionInfo (product->wszRepoName);
       SK_UpdateSoftware   (product->wszRepoName);
     }
@@ -1686,7 +1709,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   else if (tries == 0)
   {
     ++tries;
-    DeleteFileW (wszInstallerDLL);
+    DeleteFileW         (wszInstallerDLL);
     SKIM_InstallProduct (user);
   }
   
@@ -1702,6 +1725,11 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 
   if (! child)
   {
+    SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+    SKIM_OnProductSelect          ();
+    SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+    SKIM_OnBranchSelect           ();
+
     ShowWindow          (hWndMainDlg, SW_SHOW);
     SetForegroundWindow (hWndMainDlg);
     SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
@@ -2586,8 +2614,8 @@ SKIM_DisableGlobalInjector (void)
     Sleep (150UL); ++iters;
   }
 
-  time_t _time;
-  time (&_time);
+  __time32_t _time;
+  _time32  (&_time);
 
   wchar_t wszTemp      [MAX_PATH] = { };
   wchar_t wsz32BitDLL  [MAX_PATH] = { };
@@ -2740,8 +2768,10 @@ SKIM_MigrateGlobalInjector (LPVOID user)
   SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
 
 
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
   SKIM_OnProductSelect          ();
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnBranchSelect           ();
 
   return 0;
 }
@@ -2783,7 +2813,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
   DeleteFileW       (wszDestInstaller);
   MoveFileW         (wszExec, wszDestInstaller);
 
-  if (wcsicmp (startup_dir, wszDestDLL32))
+  if (_wcsicmp (startup_dir, wszDestDLL32))
   {
     MessageBox ( NULL,
                    L"SKIM64.exe has been moved to Documents\\My Mods\\SpecialK\r\n\r\n"
@@ -2856,41 +2886,47 @@ SKIM_InstallGlobalInjector (LPVOID user)
                 wszDestDLL64,
                   MAX_PATH );
 
-    SKIM_FetchInjector32  (sk32);
-
 #ifdef _WIN64
     SKIM_FetchInjector64  (sk64);
-#endif
 
     HMODULE hModInstaller =
       LoadLibrary (wszDestDLL64);
+#else
+    SKIM_FetchInjector32  (sk32);
+
+    HMODULE hModInstaller =
+      LoadLibrary (wszDestDLL32);
+#endif
 
     if (hModInstaller != nullptr)
     {
-      typedef HRESULT (__stdcall *SK_UpdateSoftware_pfn)(const wchar_t* wszProduct);
-      typedef bool    (__stdcall *SK_FetchVersionInfo_pfn)(const wchar_t* wszProduct);
+      typedef HRESULT (__stdcall *SK_UpdateSoftware1_pfn)  (const wchar_t* wszProduct, bool force);
+      typedef bool    (__stdcall *SK_FetchVersionInfo1_pfn)(const wchar_t* wszProduct, bool force);
 
-      SK_UpdateSoftware_pfn SK_UpdateSoftware =
-        (SK_UpdateSoftware_pfn)
+      SK_UpdateSoftware1_pfn SK_UpdateSoftware1 =
+        (SK_UpdateSoftware1_pfn)
           GetProcAddress ( hModInstaller,
-                            "SK_UpdateSoftware" );
+                            "SK_UpdateSoftware1" );
 
-      SK_FetchVersionInfo_pfn SK_FetchVersionInfo =
-        (SK_FetchVersionInfo_pfn)
+      SK_FetchVersionInfo1_pfn SK_FetchVersionInfo1 =
+        (SK_FetchVersionInfo1_pfn)
           GetProcAddress ( hModInstaller,
-                          "SK_FetchVersionInfo" );
+                          "SK_FetchVersionInfo1" );
 
-      if ( SK_FetchVersionInfo != nullptr &&
-           SK_UpdateSoftware   != nullptr )
+      if ( SK_FetchVersionInfo1 != nullptr &&
+           SK_UpdateSoftware1   != nullptr )
       {
         ShowWindow  ((HWND)hWndParent, SW_HIDE);
 
-        SK_FetchVersionInfo (L"SpecialK");
-        //SK_UpdateSoftware   (L"SpecialK");
-        {
-          int               nButtonPressed = 0;
-          TASKDIALOGCONFIG  config         = {0};
+        SK_FetchVersionInfo1 (L"SpecialK", true);
 
+        if (SUCCEEDED (SK_UpdateSoftware1 (L"SpecialK", true)))
+        {
+          SKIM_SetStartupInjection (TRUE, wszDestInstaller);
+
+          int               nButtonPressed =  0;
+          TASKDIALOGCONFIG  config         = { };
+          
           config.cbSize              = sizeof (config);
           config.hInstance           = g_hInstance;
           config.hwndParent          = hWndParent;
@@ -2899,33 +2935,72 @@ SKIM_InstallGlobalInjector (LPVOID user)
           config.pszMainInstruction  = L"Setup of Global Injector Successful";
           config.pButtons            = nullptr;
           config.cButtons            = 0;
-          config.pszContent          = L"Installation will complete when you "
-                                       L"run a Steam game.";
+
+          wchar_t wszWorkingDir [MAX_PATH] = { };
+          wchar_t wszContent    [  4096  ] = { };
+
+          GetCurrentDirectoryW (MAX_PATH - 1, wszWorkingDir);
+
+          swprintf ( wszContent, L"  Please manually re-start SKIM64.exe from\r\n"
+                                 L"\r\n     "
+                                 L"<a href=\"%ws\">Documents\\My Mods\\SpecialK\\"
+                                 L"</a>\r\n"
+                                 L"\r\n"
+                                 L"  and click \"Start Injecting\"",
+                                   wszWorkingDir );
+
+          config.pszContent          = wszContent;
           config.pszFooterIcon       = TD_SHIELD_ICON;
           config.pszFooter           = L"Compatibility Menu:   HOLD "
                                        L"Ctrl + Shift at game startup.";
           config.pszMainIcon         = TD_INFORMATION_ICON;
           config.pszVerificationText = L"Start With Windows";
-          config.dwFlags             = TDF_VERIFICATION_FLAG_CHECKED;
+          config.dwFlags             = TDF_VERIFICATION_FLAG_CHECKED |
+                                       TDF_ENABLE_HYPERLINKS;
 
+          config.pfCallback          = 
+            []( _In_ HWND     hWnd,
+                _In_ UINT     uNotification,
+                _In_ WPARAM   wParam,
+                _In_ LPARAM   lParam,
+                _In_ LONG_PTR dwRefData ) ->
+            HRESULT
+            {
+              UNREFERENCED_PARAMETER (dwRefData);
+              UNREFERENCED_PARAMETER (wParam);
+
+              if (uNotification == TDN_HYPERLINK_CLICKED)
+              {
+                ShellExecuteW ( hWnd,
+                                  L"OPEN",
+                                    (wchar_t *)lParam,
+                                      nullptr, nullptr,
+                                        SW_SHOWNORMAL );
+
+                SKIM_Tray_RemoveFrom (                          );
+                TerminateProcess     (GetCurrentProcess (), 0x00);
+                ExitProcess          (                      0x00);
+              }
+
+              return S_OK;
+            };
+          
           BOOL bStartWithWindows = TRUE;
-
+          
           TaskDialogIndirect (&config, &nButtonPressed, nullptr, &bStartWithWindows);
 
           SKIM_SetStartupInjection (bStartWithWindows, wszDestInstaller);
-          SKIM_GlobalInject_Start  ();
         }
 
         ShowWindow  ((HWND)hWndParent, SW_SHOW);
         SendMessage ((HWND)hWndParent, WM_INITDIALOG, 0x00, 0x00);
       }
-
-      //FreeLibrary (hModInstaller);
     }
   }
 
   SKIM_OnProductSelect          ();
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnProductSelect          ();
 
   return 0;
 }
@@ -2950,9 +3025,16 @@ wWinMain ( _In_     HINSTANCE hInstance,
     SKIM_DetermineInstallState (products [i]);
   }
 
-  GetCurrentDirectoryW (MAX_PATH, startup_dir);
+  GetCurrentDirectoryW  (MAX_PATH, startup_dir);
+  wchar_t wszVersionDir [MAX_PATH] = { };
 
-  std::unique_ptr <wchar_t> wszArgs (PathGetArgsW (GetCommandLineW ()));
+  lstrcatW   (wszVersionDir, startup_dir);
+  PathAppend (wszVersionDir, L"Version");
+
+  SKIM_Util_DeleteTemporaryFiles (startup_dir,   L"*.tmp");
+  SKIM_Util_DeleteTemporaryFiles (wszVersionDir, L"*.old");
+
+  std::unique_ptr <wchar_t> wszArgs (_wcsdup (PathGetArgsW (GetCommandLineW ())));
 
                                  WNDCLASS wc = { };
   GetClassInfo  (g_hInstance, L"#32770", &wc);
@@ -3134,7 +3216,8 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
   if (hWndRestart)
   {
-    DestroyWindow (hWndRestart);
+    SKIM_Tray_RemoveFrom (           );
+    DestroyWindow        (hWndRestart);
 
     STARTUPINFO         sinfo = { 0 };
     PROCESS_INFORMATION pinfo = { 0 };

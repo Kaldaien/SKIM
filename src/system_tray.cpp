@@ -21,7 +21,6 @@
 #include <Shlwapi.h>
 #include <shobjidl.h>
 #include <shlguid.h>
-#include <strsafe.h>
 #include <atlbase.h>
 
 #include "system_tray.h"
@@ -74,7 +73,7 @@ SKIM_Tray_RefreshMenu (HWND hWndDlg, bool add)
   static std::wstring inject_summary;
   inject_summary = L"";
 
-  int count =
+  size_t count =
     SKIM_SummarizeInjectedPIDs (inject_summary);
 
   if (count == 0)

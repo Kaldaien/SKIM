@@ -21,7 +21,6 @@
 #include <Shlwapi.h>
 #include <shobjidl.h>
 #include <shlguid.h>
-#include <strsafe.h>
 #include <atlbase.h>
 
 HMODULE hModGlobal = 0;//LoadLibrary (L"SpecialK64.dll");
@@ -111,7 +110,6 @@ SKIM_GlobalInject_Start (void)
 
 #include <shobjidl.h>
 #include <shlguid.h>
-#include <strsafe.h>
 #include <atlbase.h>
 
 bool
