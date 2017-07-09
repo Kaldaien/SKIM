@@ -478,7 +478,7 @@ DownloadThread (LPVOID user)
         ProgressMsg ( PBM_SETPOS,
                         (WPARAM)(
                           std::numeric_limits <int32_t>::max () *
-                            ((double)cur / (double)max)
+                            ((double)cur / std::max (0.0001, (double)max))
                         ),
                           0L );
       };

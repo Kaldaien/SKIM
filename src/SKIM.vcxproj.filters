@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="AppInit_DLLs.cpp" />
     <ClCompile Include="SKIM.cpp" />
     <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="DLC.cpp">
@@ -13,7 +12,6 @@
     <ClCompile Include="network.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AppInit_DLLs.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -38,16 +36,7 @@
     <Image Include="..\donate.bmp" />
     <Image Include="..\SKIM.ico" />
     <Image Include="..\tray.ico" />
-    <Image Include="..\icon2.ico" />
-    <Image Include="..\exit.ico" />
-    <Image Include="..\start.ico" />
-    <Image Include="..\stop.ico" />
-    <Image Include="..\startup.ico" />
-    <Image Include="..\bitmap1.bmp" />
     <Image Include="..\exit.bmp" />
     <Image Include="..\start.bmp" />
-    <Image Include="..\icon3.ico" />
-    <Image Include="..\bitmap2.bmp" />
-    <Image Include="..\bitmap3.bmp" />
   </ItemGroup>
 </Project>

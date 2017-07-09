@@ -27,6 +27,7 @@ HMODULE hModGlobal = 0;//LoadLibrary (L"SpecialK64.dll");
 
 #include "injection.h"
 #include "system_tray.h"
+#include "SKIM.h"
 
 SKX_RemoveCBTHook_pfn   SKX_RemoveCBTHook   = nullptr;
 SKX_InstallCBTHook_pfn  SKX_InstallCBTHook  = nullptr;
@@ -113,14 +114,39 @@ SKIM_GlobalInject_Start (void)
 #include <atlbase.h>
 
 bool
-SKIM_GetStartupDir (wchar_t* buf, uint32_t* pdwLen)
+SKIM_GetProgramsDir (wchar_t* buf, uint32_t* pdwLen)
 {
-  HANDLE hToken;
+  CComHeapPtr <wchar_t> str;
+  CHandle               hToken;
 
-  if (! OpenProcessToken (GetCurrentProcess (), TOKEN_READ, &hToken))
+  if (! OpenProcessToken (GetCurrentProcess (), TOKEN_READ, &hToken.m_h))
     return false;
 
-  wchar_t* str;
+  if ( SUCCEEDED (
+         SHGetKnownFolderPath (
+           FOLDERID_Programs, 0, hToken, &str
+         )
+       )
+     )
+  {
+    if (buf != nullptr && pdwLen != nullptr && *pdwLen > 0) {
+      wcsncpy (buf, str, *pdwLen);
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+bool
+SKIM_GetStartupDir (wchar_t* buf, uint32_t* pdwLen)
+{
+  CComHeapPtr <wchar_t> str;
+  CHandle               hToken;
+
+  if (! OpenProcessToken (GetCurrentProcess (), TOKEN_READ, &hToken.m_h))
+    return false;
 
   if ( SUCCEEDED (
          SHGetKnownFolderPath (
@@ -133,8 +159,6 @@ SKIM_GetStartupDir (wchar_t* buf, uint32_t* pdwLen)
       wcsncpy (buf, str, *pdwLen);
     }
 
-    CoTaskMemFree (str);
-
     return true;
   }
 
@@ -142,7 +166,7 @@ SKIM_GetStartupDir (wchar_t* buf, uint32_t* pdwLen)
 }
 
 std::wstring
-SKIM_GetShortcutName (void)
+SKIM_GetStartupShortcut (void)
 {
   wchar_t wszLink [MAX_PATH * 2] = { };
   DWORD    dwLen = MAX_PATH * 2 - 1;
@@ -154,10 +178,23 @@ SKIM_GetShortcutName (void)
   return wszLink;
 }
 
+std::wstring
+SKIM_GetStartMenuShortcut (void)
+{
+  wchar_t wszLink [MAX_PATH * 2] = { };
+  DWORD    dwLen = MAX_PATH * 2 - 1;
+
+  SKIM_GetProgramsDir (wszLink, (uint32_t *)&dwLen);
+
+  PathAppend (wszLink, L"Special K\\SKIM64.lnk");
+
+  return wszLink;
+}
+
 bool
 SKIM_IsLaunchedAtStartup (void)
 {
-  std::wstring link_file = SKIM_GetShortcutName ();
+  std::wstring link_file = SKIM_GetStartupShortcut ();
 
   HRESULT              hr  = E_FAIL; 
   CComPtr <IShellLink> psl = nullptr;
@@ -189,7 +226,7 @@ SKIM_SetStartupInjection (bool enable, wchar_t* wszExecutable)
 {
   if (enable && (! SKIM_IsLaunchedAtStartup ()))
   {
-    std::wstring link_file = SKIM_GetShortcutName ();
+    std::wstring link_file = SKIM_GetStartupShortcut ();
 
     HRESULT              hr  = E_FAIL; 
     CComPtr <IShellLink> psl = nullptr;
@@ -198,7 +235,7 @@ SKIM_SetStartupInjection (bool enable, wchar_t* wszExecutable)
 
     if (SUCCEEDED (hr))
     {
-      std::unique_ptr <wchar_t> work_dir (wcsdup (wszExecutable));
+      std::unique_ptr <wchar_t> work_dir (_wcsdup (wszExecutable));
       PathRemoveFileSpecW (work_dir.get ());
 
       psl->SetShowCmd          (SW_NORMAL);
@@ -229,7 +266,7 @@ SKIM_SetStartupInjection (bool enable, wchar_t* wszExecutable)
 
   else if ((! enable) && SKIM_IsLaunchedAtStartup ())
   {
-    bool ret = DeleteFileW (SKIM_GetShortcutName ().c_str ());
+    bool ret = DeleteFileW (SKIM_GetStartupShortcut ().c_str ());
 
     SKIM_Tray_UpdateStartup ();
 
@@ -244,42 +281,77 @@ SKIM_SetStartupInjection (bool enable, wchar_t* wszExecutable)
 }
 
 bool
+SKIM_SetStartMenuLink (bool enable, wchar_t* wszExecutable)
+{
+  if (enable)
+  {
+    std::wstring link_file = SKIM_GetStartMenuShortcut ();
+
+    SKIM_Util_CreateDirectories (link_file.c_str ());
+
+    HRESULT              hr  = E_FAIL; 
+    CComPtr <IShellLink> psl = nullptr;
+
+    hr = CoCreateInstance (CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink, (LPVOID *)&psl);
+
+    if (SUCCEEDED (hr))
+    {
+      std::unique_ptr <wchar_t> work_dir (_wcsdup (wszExecutable));
+      PathRemoveFileSpecW (work_dir.get ());
+
+      psl->SetShowCmd          (SW_NORMAL);
+      psl->SetPath             (wszExecutable);
+      psl->SetWorkingDirectory (work_dir.get ());
+      psl->SetDescription      (L"Special K Install Manager");
+      psl->SetArguments        (L"");
+      psl->SetIconLocation     (wszExecutable, 0);
+
+      CComPtr <IPersistFile> ppf = nullptr;
+
+      hr = psl->QueryInterface (IID_IPersistFile, (void **)&ppf);
+
+      if (SUCCEEDED (hr))
+      {
+        hr = ppf->Save (link_file.c_str (), TRUE);
+
+        if (SUCCEEDED (hr))
+        {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  else if ((! enable))
+  {
+    bool ret =
+      DeleteFileW (SKIM_GetStartMenuShortcut ().c_str ());
+
+    if (ret)
+    {
+      std::unique_ptr <wchar_t> start_menu_path (
+        _wcsdup (SKIM_GetStartMenuShortcut ().c_str ())
+      );
+
+            PathRemoveFileSpec (start_menu_path.get ());
+      ret = RemoveDirectoryW   (start_menu_path.get ());
+    }
+
+    return ret;
+  }
+
+  return false;
+}
+
+bool
 SKIM_GlobalInject_Stop (bool confirm)
 {
   if (SKIM_GlobalInject_Load ())
   {
     if (SKX_IsHookingCBT ())
     {
-      std::wstring confirmation = L"";
-
-      //if (confirm && SKIM_SummarizeInjectedPIDs (confirmation))
-      //{
-      //  int               nButtonPressed =  0;
-      //  TASKDIALOGCONFIG  config         = { };
-      //
-      //  config.cbSize             = sizeof (config);
-      //  config.hInstance          = g_hInstance;
-      //  config.hwndParent         = GetActiveWindow ();
-      //  config.pszWindowTitle     = L"Special K Install Manager";
-      //  config.dwCommonButtons    = TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
-      //  config.pszMainInstruction = L"Software May Crash if Injection Stops";
-      //  config.pButtons           = nullptr;
-      //  config.cButtons           = 0;
-      //  config.nDefaultButton     = IDCANCEL;
-      //
-      //  config.dwFlags            = /*TDF_SIZE_TO_CONTENT*/0x00;
-      //  config.pszMainIcon        = TD_WARNING_ICON;
-      //
-      //  config.pszContent         = confirmation.c_str ();
-      //
-      //  TaskDialogIndirect (&config, &nButtonPressed, nullptr, nullptr);
-      //
-      //  if ( nButtonPressed == IDCANCEL )
-      //  {
-      //    return false;
-      //  }
-      //}
-
       SKX_RemoveCBTHook ();
   
       if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
@@ -388,8 +460,7 @@ SKIM_StopInjectingAndExit (HWND hWndDlg, bool confirm)
     SKIM_GlobalInject_Stop (hWndDlg, confirm);
   }
 
-  SKIM_Tray_RemoveFrom ();
-  ExitProcess      (0x00);
+  SKIM_Exit ();
 }
 
 // 0 = Removed

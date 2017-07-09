@@ -52,6 +52,7 @@ RECT SKIM_GetDlgItemRect (HWND hDlg, UINT nIDDlgItem);
 void SKIM_OnBranchSelect  (void);
 void SKIM_OnProductSelect (void);
 bool SKIM_ConfirmClose    (void);
+void SKIM_Exit            (void);
 
 enum {
   SKIM_STOP_INJECTION          = WM_USER + 0x122,

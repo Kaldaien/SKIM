@@ -62,9 +62,6 @@ SKIM_Tray_RefreshMenu (HWND hWndDlg, bool add)
   sys_tray_icon.uFlags      |= NIF_ICON | NIF_TIP | NIF_MESSAGE |
                                /*NIF_INFO |*/ NIF_GUID | NIF_SHOWTIP;
 
-  //wcscpy (sys_tray_icon.szInfoTitle, L"Special K Install Manager ");
-  //wcscat (sys_tray_icon.szInfoTitle, SKIM_VERSION_STR_W);
-
   sys_tray_icon.uCallbackMessage = WM_USER | 0x0420;
   sys_tray_icon.uVersion         = NOTIFYICON_VERSION;
   sys_tray_icon.dwInfoFlags     |= NIIF_INFO | NIIF_LARGE_ICON | NIIF_RESPECT_QUIET_TIME;
@@ -337,7 +334,7 @@ SKIM_Tray_ProcessCommand (HWND hWndDlg, LPARAM lParam, WPARAM wParam)
       // Exit
       case 6:
       {
-        if (SKIM_GlobalInject_Stop (hWndDlg))
+        //if (SKIM_GlobalInject_Stop (hWndDlg))
           SKIM_StopInjectingAndExit (hWndDlg);
       } break;
 

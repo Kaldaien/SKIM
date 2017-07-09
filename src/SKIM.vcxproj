@@ -209,9 +209,9 @@
       </PrecompiledHeader>
       <Optimization>MinSpace</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN64;NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
@@ -240,7 +240,6 @@
     </ProjectReference>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="AppInit_DLLs.h" />
     <ClInclude Include="APP_VERSION.H" />
     <ClInclude Include="branch.h" />
     <ClInclude Include="ini.h" />
@@ -254,7 +253,6 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="AppInit_DLLs.cpp" />
     <ClCompile Include="DLC.cpp" />
     <ClCompile Include="ini.cpp" />
     <ClCompile Include="injection.cpp" />
@@ -280,19 +278,10 @@
     <ResourceCompile Include="SKIM.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\bitmap1.bmp" />
-    <Image Include="..\bitmap2.bmp" />
-    <Image Include="..\bitmap3.bmp" />
     <Image Include="..\donate.bmp" />
     <Image Include="..\exit.bmp" />
-    <Image Include="..\exit.ico" />
-    <Image Include="..\icon2.ico" />
-    <Image Include="..\icon3.ico" />
     <Image Include="..\SKIM.ico" />
     <Image Include="..\start.bmp" />
-    <Image Include="..\start.ico" />
-    <Image Include="..\startup.ico" />
-    <Image Include="..\stop.ico" />
     <Image Include="..\tray.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

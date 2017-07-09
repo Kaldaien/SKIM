@@ -54,7 +54,6 @@
 
 #include "Resource.h"
 
-#include "AppInit_DLLs.h"
 #include "APP_VERSION.H"
 #include "ini.h"
 #include "branch.h"
@@ -262,6 +261,14 @@ sk_product_t products [] =
     0
   }
 };
+
+void
+SKIM_Exit (void)
+{
+  SKIM_Tray_RemoveFrom (                          );
+  TerminateProcess     (GetCurrentProcess (), 0x00);
+  ExitProcess          (                      0x00);
+}
 
 const wchar_t*
 SKIM_SteamUtil_GetInstallDir (void)
@@ -813,15 +820,15 @@ SKIM_Util_IsProcessRunning (const wchar_t* wszProcName)
   return false;
 }
 
+
 bool
 SKIM_Util_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
 {
-  HANDLE hToken;
+  CComHeapPtr <wchar_t> str;
+  CHandle               hToken;
 
-  if (! OpenProcessToken (GetCurrentProcess (), TOKEN_READ, &hToken))
+  if (! OpenProcessToken (GetCurrentProcess (), TOKEN_READ, &hToken.m_h))
     return false;
-
-  wchar_t* str;
 
   if ( SUCCEEDED (
          SHGetKnownFolderPath (
@@ -833,8 +840,6 @@ SKIM_Util_GetDocumentsDir (wchar_t* buf, uint32_t* pdwLen)
     if (buf != nullptr && pdwLen != nullptr && *pdwLen > 0) {
       wcsncpy (buf, str, *pdwLen);
     }
-
-    CoTaskMemFree (str);
 
     return true;
   }
@@ -853,10 +858,16 @@ SKIM_Util_MoveFileNoFail ( const wchar_t* wszOld, const wchar_t* wszNew )
                         wszNew,
                           MOVEFILE_REPLACE_EXISTING ) )
   {
-    wchar_t wszTemp [MAX_PATH] = { };
-    GetTempFileNameW (wszOld, L"SKI", timeGetTime (), wszTemp);
+    wchar_t wszPath [MAX_PATH] = { };
+    wcscpy (wszPath, wszNew);
 
-    MoveFileExW ( wszNew, wszTemp, 0x00 );
+    PathRemoveFileSpec (wszPath);
+
+    wchar_t wszTemp [MAX_PATH] = { };
+    GetTempFileNameW (wszPath, L"SKI", timeGetTime (), wszTemp);
+
+    MoveFileExW ( wszNew, wszTemp, MOVEFILE_REPLACE_EXISTING );
+    MoveFileExW ( wszOld, wszNew,  MOVEFILE_REPLACE_EXISTING );
   }
 }
 
@@ -1050,8 +1061,7 @@ SKIM_UninstallProduct (LPVOID user)
 
   if (child)
   {
-    TerminateProcess (GetCurrentProcess (), 0x00);
-    ExitProcess      (                      0x00);
+    SKIM_Exit ();
   }
 
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
@@ -1130,8 +1140,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
                                 nullptr, nullptr,
                                   SW_SHOWMAXIMIZED );
 
-          TerminateProcess (GetCurrentProcess (), 0x00);
-          ExitProcess      (                      0x00);
+          SKIM_Exit ();
         }
 
         return S_FALSE;
@@ -1192,8 +1201,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
                                 nullptr, nullptr,
                                   SW_SHOWMAXIMIZED );
 
-          TerminateProcess (GetCurrentProcess (), 0x00);
-          ExitProcess      (                      0x00);
+          SKIM_Exit ();
         }
 
         return S_FALSE;
@@ -1246,11 +1254,11 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
       if ( GetFileAttributes (wszDeployedSteamAPI)   != INVALID_FILE_ATTRIBUTES ||
            GetFileAttributes (wszDeployedSteamAPI64) != INVALID_FILE_ATTRIBUTES )
       {
-        STARTUPINFO         sinfo = { 0 };
-        PROCESS_INFORMATION pinfo = { 0 };
+        STARTUPINFO         sinfo = { };
+        PROCESS_INFORMATION pinfo = { };
 
         sinfo.cb          = sizeof STARTUPINFO;
-        sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+        sinfo.dwFlags     = STARTF_USESHOWWINDOW;
         sinfo.wShowWindow = SW_HIDE;
 
         wchar_t wszRepoINI    [MAX_PATH] = { };
@@ -1436,8 +1444,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
                                 nullptr, nullptr,
                                   SW_SHOWMAXIMIZED );
 
-          TerminateProcess (GetCurrentProcess (), 0x00);
-          ExitProcess      (                      0x00);
+          SKIM_Exit ();
         }
 
         return S_FALSE;
@@ -1503,8 +1510,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
                                 nullptr, nullptr,
                                   SW_SHOWMAXIMIZED );
 
-          TerminateProcess (GetCurrentProcess (), 0x00);
-          ExitProcess      (                      0x00);
+          SKIM_Exit ();
         }
 
         return S_FALSE;
@@ -1551,6 +1557,12 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   wcscpy ( wszInstallPath,
             SKIM_FindInstallPath (product->uiSteamAppID) );
 
+  wchar_t   wszVersionPath [MAX_PATH] = { };
+  wcscpy   (wszVersionPath, wszInstallPath);
+  lstrcatW (wszVersionPath, L"\\Version\\");
+
+  SKIM_Util_CreateDirectories (wszVersionPath);
+
   wchar_t wszAppID      [MAX_PATH * 2] = { };
   wchar_t wszExecutable [MAX_PATH + 1] = { };
 
@@ -1577,11 +1589,11 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
       if ( GetFileAttributes (wszDeployedSteamAPI)   != INVALID_FILE_ATTRIBUTES ||
            GetFileAttributes (wszDeployedSteamAPI64) != INVALID_FILE_ATTRIBUTES )
       {
-        STARTUPINFO         sinfo = { 0 };
-        PROCESS_INFORMATION pinfo = { 0 };
+        STARTUPINFO         sinfo = { };
+        PROCESS_INFORMATION pinfo = { };
 
         sinfo.cb          = sizeof STARTUPINFO;
-        sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+        sinfo.dwFlags     = STARTF_USESHOWWINDOW;
         sinfo.wShowWindow = SW_HIDE;
 
         wchar_t wszInstallerINI [MAX_PATH] = { };
@@ -1701,7 +1713,12 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
          SK_UpdateSoftware   != nullptr )
     {
       SK_FetchVersionInfo (product->wszRepoName);
-      SK_UpdateSoftware   (product->wszRepoName);
+
+      if (FAILED (SK_UpdateSoftware (product->wszRepoName)))
+      {
+        FreeLibrary (hModInstaller);
+        DeleteFileW (wszInstallerDLL);
+      }
     }
   }
 
@@ -2388,11 +2405,11 @@ Main_DlgProc (
           //
           else if (product->uiSteamAppID == 351970)
           {
-            STARTUPINFO         sinfo = { 0 };
-            PROCESS_INFORMATION pinfo = { 0 };
+            STARTUPINFO         sinfo = { };
+            PROCESS_INFORMATION pinfo = { };
 
             sinfo.cb          = sizeof STARTUPINFO;
-            sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+            sinfo.dwFlags     = STARTF_USESHOWWINDOW;
             sinfo.wShowWindow = SW_SHOWNORMAL;
 
             SetCurrentDirectory (
@@ -2427,11 +2444,11 @@ Main_DlgProc (
           //
           else if (product->uiSteamAppID == 374320)
           {
-            STARTUPINFO         sinfo = { 0 };
-            PROCESS_INFORMATION pinfo = { 0 };
+            STARTUPINFO         sinfo = { };
+            PROCESS_INFORMATION pinfo = { };
 
             sinfo.cb          = sizeof STARTUPINFO;
-            sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+            sinfo.dwFlags     = STARTF_USESHOWWINDOW;
             sinfo.wShowWindow = SW_SHOWNORMAL;
 
             SetCurrentDirectory (
@@ -2492,11 +2509,7 @@ Main_DlgProc (
         {
           if (SKIM_GlobalInject_Stop ())
           {
-            SKIM_Tray_RemoveFrom      (       );
             SKIM_StopInjectingAndExit (hWndDlg);
-
-            TerminateProcess (GetCurrentProcess (), 0x00);
-            ExitProcess      (                      0x00);
           }
         }
       }
@@ -2611,7 +2624,7 @@ SKIM_DisableGlobalInjector (void)
   // Wait for uninjection to finish (the stupid way)
   int iters = 0;
   while (GetFileAttributes (L"SpecialK32.pid") != INVALID_FILE_ATTRIBUTES && iters < 4) {
-    Sleep (150UL); ++iters;
+    SleepEx (150UL, TRUE); ++iters;
   }
 
   __time32_t _time;
@@ -2620,6 +2633,10 @@ SKIM_DisableGlobalInjector (void)
   wchar_t wszTemp      [MAX_PATH] = { };
   wchar_t wsz32BitDLL  [MAX_PATH] = { };
   wchar_t wsz64BitDLL  [MAX_PATH] = { };
+  wchar_t wszSKIM      [MAX_PATH] = { };
+
+  wcscpy     (wszSKIM,     SKIM_FindInstallPath (0));
+  PathAppend (wszSKIM,     L"SKIM64.exe");
 
   wcscpy     (wsz32BitDLL, SKIM_FindInstallPath (0));
   PathAppend (wsz32BitDLL, L"SpecialK32.dll");
@@ -2648,6 +2665,8 @@ SKIM_DisableGlobalInjector (void)
 
   DeleteFileW (wszInstalled);
   DeleteFileW (wszRepo);
+
+  SKIM_SetStartMenuLink (FALSE, wszSKIM);
 }
 
 
@@ -2784,52 +2803,67 @@ SKIM_InstallGlobalInjector (LPVOID user)
 
   SKIM_GlobalInject_Stop (false);
 
-  wchar_t wszDestDLL32 [MAX_PATH] = {  };
-  wchar_t wszDestDLL64 [MAX_PATH] = {  };
+  wchar_t wszDestDLL32 [MAX_PATH] = { };
+  wchar_t wszDestDLL64 [MAX_PATH] = { };
 
   uint32_t dwStrLen = MAX_PATH;
   SKIM_Util_GetDocumentsDir (wszDestDLL32, &dwStrLen);
 
-  dwStrLen = MAX_PATH;
-  SKIM_Util_GetDocumentsDir (wszDestDLL64, &dwStrLen);
+  lstrcatW (wszDestDLL32, L"\\My Mods\\SpecialK");
 
-  PathAppend (wszDestDLL32, L"My Mods\\SpecialK");
-  PathAppend (wszDestDLL64, L"My Mods\\SpecialK");
+  wchar_t wszDestVersion   [MAX_PATH] = { };
+  wchar_t wszDestInstaller [MAX_PATH] = { };
+  wchar_t wszTempInstaller [MAX_PATH] = { };
+
+  wcscpy (wszDestInstaller, wszDestDLL32);
+  wcscpy (wszTempInstaller, wszDestDLL32);
+  wcscpy (wszDestVersion,   wszDestDLL32);
+  lstrcatW (wszDestVersion, L"\\Version\\");
+
+#ifdef _WIN64
+  lstrcatW (wszDestInstaller, L"\\SKIM64.exe");
+  lstrcatW (wszTempInstaller, L"\\SKIM64.old");
+#else
+  lstrcatW (wszDestInstaller, L"\\SKIM.exe");
+  lstrcatW (wszTempInstaller, L"\\SKIM.old");
+#endif
 
   // Create the destination directory
-  SKIM_Util_CreateDirectories (wszDestDLL32);
-
-  wchar_t wszDestInstaller [MAX_PATH] = { };
-  lstrcatW (wszDestInstaller, wszDestDLL32);
-#ifdef _WIN64
-  PathAppend (wszDestInstaller, L"SKIM64.exe");
-#else
-  PathAppend (wszDestInstaller, L"SKIM.exe");
-#endif
+  SKIM_Util_CreateDirectories (wszDestInstaller);
+  SKIM_Util_CreateDirectories (wszDestVersion);
 
   wchar_t wszExec [MAX_PATH] = { };
 
   GetModuleFileName (GetModuleHandle (nullptr), wszExec, MAX_PATH);
-  DeleteFileW       (wszDestInstaller);
-  MoveFileW         (wszExec, wszDestInstaller);
 
   if (_wcsicmp (startup_dir, wszDestDLL32))
   {
-    MessageBox ( NULL,
-                   L"SKIM64.exe has been moved to Documents\\My Mods\\SpecialK\r\n\r\n"
-                   L"\tPlease run it from there from now on",
-                     L"Installer Moved",
-                       MB_OK | MB_ICONINFORMATION );
-    TerminateProcess (GetCurrentProcess (), 0x0);
-  }
+    SKIM_Util_MoveFileNoFail (wszExec, wszDestInstaller);
 
-  SetCurrentDirectoryW (wszDestDLL32);
-  wcscpy               (startup_dir, wszDestDLL32);
+    STARTUPINFO         sinfo = { };
+    PROCESS_INFORMATION pinfo = { };
+
+    sinfo.cb          = sizeof STARTUPINFO;
+    sinfo.dwFlags     = STARTF_USESHOWWINDOW;
+    sinfo.wShowWindow = SW_NORMAL;
+
+    CreateProcess ( wszDestInstaller,
+                      L"\"SKIM64.exe\" 0",
+                        nullptr, nullptr,
+                          FALSE, 0x00,
+                            nullptr, wszDestDLL32,
+                              &sinfo, &pinfo );
+
+    CloseHandle (pinfo.hThread);
+    CloseHandle (pinfo.hProcess);
+
+    SKIM_Exit ();
+  }
 
   DeleteFileW (L"Version\\installed.ini");
 
-  GetShortPathNameW (wszDestDLL32, wszDestDLL32, MAX_PATH);
-  GetShortPathNameW (wszDestDLL64, wszDestDLL64, MAX_PATH);
+  //
+  //
 
 #if 0
   if (StrStrIW (wszDestDLL32, L" ")) {
@@ -2845,25 +2879,11 @@ SKIM_InstallGlobalInjector (LPVOID user)
   else 
 #endif
   {
-    PathAppend (wszDestDLL32, L"SpecialK32.dll");
-    PathAppend (wszDestDLL64, L"SpecialK64.dll");
+#ifdef _WIN64
+    wcscpy (wszDestDLL64, wszDestDLL32);
+    lstrcatW (wszDestDLL64, L"\\SpecialK64.dll");
 
-    sk_product_t sk32 =
-    {
-      L"SpecialK32.dll",
-      L"",
-      L"Special K",
-      L"Special K",
-      L"Special K (Global Injector)",
-      L"SpecialK/0.8.x",
-      L"8A7FSUFJ6KB2U",
-      0,
-      SK_BOTH_BIT,
-      nullptr,
-      0
-    };
-
-    sk_product_t sk64 =
+    static sk_product_t sk64 =
     {
       L"SpecialK64.dll",
       L"",
@@ -2878,20 +2898,34 @@ SKIM_InstallGlobalInjector (LPVOID user)
       0
     };
 
-    wcsncpy ( sk32.wszWrapper, 
-                wszDestDLL32,
-                  MAX_PATH );
+    wcscpy ( sk64.wszWrapper, 
+               wszDestDLL64 );
 
-    wcsncpy ( sk64.wszWrapper, 
-                wszDestDLL64,
-                  MAX_PATH );
-
-#ifdef _WIN64
     SKIM_FetchInjector64  (sk64);
 
     HMODULE hModInstaller =
       LoadLibrary (wszDestDLL64);
 #else
+    lstrcatW (wszDestDLL32, L"\\SpecialK32.dll");
+
+    static sk_product_t sk32 =
+    {
+      L"SpecialK32.dll",
+      L"",
+      L"Special K",
+      L"Special K",
+      L"Special K (Global Injector)",
+      L"SpecialK/0.8.x",
+      L"8A7FSUFJ6KB2U",
+      0,
+      SK_BOTH_BIT,
+      nullptr,
+      0
+    };
+
+    wcscpy ( sk32.wszWrapper, 
+                wszDestDLL32 );
+
     SKIM_FetchInjector32  (sk32);
 
     HMODULE hModInstaller =
@@ -2923,6 +2957,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
         if (SUCCEEDED (SK_UpdateSoftware1 (L"SpecialK", true)))
         {
           SKIM_SetStartupInjection (TRUE, wszDestInstaller);
+          SKIM_SetStartMenuLink    (TRUE, wszDestInstaller);
 
           int               nButtonPressed =  0;
           TASKDIALOGCONFIG  config         = { };
@@ -2941,12 +2976,11 @@ SKIM_InstallGlobalInjector (LPVOID user)
 
           GetCurrentDirectoryW (MAX_PATH - 1, wszWorkingDir);
 
-          swprintf ( wszContent, L"  Please manually re-start SKIM64.exe from\r\n"
+          swprintf ( wszContent, L"This program (SKIM64.exe) is now located in:\r\n"
                                  L"\r\n     "
                                  L"<a href=\"%ws\">Documents\\My Mods\\SpecialK\\"
-                                 L"</a>\r\n"
-                                 L"\r\n"
-                                 L"  and click \"Start Injecting\"",
+                                 L"</a>\r\n\r\n"
+                                 L"This program will now minimize itself to the system tray.",
                                    wszWorkingDir );
 
           config.pszContent          = wszContent;
@@ -2978,8 +3012,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
                                         SW_SHOWNORMAL );
 
                 SKIM_Tray_RemoveFrom (                          );
-                TerminateProcess     (GetCurrentProcess (), 0x00);
-                ExitProcess          (                      0x00);
+                SendMessage          (hWndMainDlg, SKIM_RESTART_INJECTION, 0, 0);
               }
 
               return S_OK;
@@ -2989,7 +3022,15 @@ SKIM_InstallGlobalInjector (LPVOID user)
           
           TaskDialogIndirect (&config, &nButtonPressed, nullptr, &bStartWithWindows);
 
-          SKIM_SetStartupInjection (bStartWithWindows, wszDestInstaller);
+          SKIM_SetStartupInjection (bStartWithWindows,       wszDestInstaller);
+          SKIM_Tray_RemoveFrom     (                                         );
+          SendMessage              (hWndMainDlg, SKIM_RESTART_INJECTION, 0, 0);
+        }
+
+        else
+        {
+          FreeLibrary (hModInstaller);
+          DeleteFileW (wszDestDLL64);
         }
 
         ShowWindow  ((HWND)hWndParent, SW_SHOW);
@@ -3080,8 +3121,7 @@ wWinMain ( _In_     HINSTANCE hInstance,
       if (IsWindow (hWndExisting))
         SendMessage (hWndExisting, SKIM_STOP_INJECTION_AND_EXIT, 0, 0);
 
-      TerminateProcess (GetCurrentProcess (), 0x00);
-      ExitProcess      (                      0x00);
+      SKIM_Exit ();
     }
 
     if (__SKIM_Inject)
@@ -3105,8 +3145,7 @@ wWinMain ( _In_     HINSTANCE hInstance,
         if (IsWindow (hWndExisting))
           SendMessage (hWndExisting, SKIM_START_INJECTION, 0, 0);
 
-        TerminateProcess (GetCurrentProcess (), 0x00);
-        ExitProcess      (                      0x00);
+        SKIM_Exit ();
       }
     }
   }
@@ -3219,11 +3258,11 @@ wWinMain ( _In_     HINSTANCE hInstance,
     SKIM_Tray_RemoveFrom (           );
     DestroyWindow        (hWndRestart);
 
-    STARTUPINFO         sinfo = { 0 };
-    PROCESS_INFORMATION pinfo = { 0 };
+    STARTUPINFO         sinfo = { };
+    PROCESS_INFORMATION pinfo = { };
 
     sinfo.cb          = sizeof STARTUPINFO;
-    sinfo.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    sinfo.dwFlags     = STARTF_USESHOWWINDOW;
     sinfo.wShowWindow = SW_NORMAL;
 
     CreateProcess ( L"SKIM64.exe",
@@ -3232,11 +3271,13 @@ wWinMain ( _In_     HINSTANCE hInstance,
                           FALSE, 0x00,
                             nullptr, startup_dir,
                               &sinfo, &pinfo );
+
+    CloseHandle (pinfo.hThread);
+    CloseHandle (pinfo.hProcess);
   }
 
   // Prevent DLL shutdown, we didn't load the DLLs for their regular intended purpose
-  TerminateProcess (GetCurrentProcess (), 0x00);
-  ExitProcess      (                      0x00);
+  SKIM_Exit ();
 
 UNREFERENCED_PARAMETER (nCmdShow);
 UNREFERENCED_PARAMETER (lpCmdLine);
