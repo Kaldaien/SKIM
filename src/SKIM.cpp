@@ -87,6 +87,7 @@ sk_product_t products [] =
     L"", L"Special K", // DLL ProductName
     L"Special K",
     L"Special K (Global Injector)",
+    L"",
     L"SpecialK/0.8.x",
     L"8A7FSUFJ6KB2U",
     0,
@@ -95,6 +96,7 @@ sk_product_t products [] =
 #else
     SK_32_BIT,
 #endif
+    false,
     L"Applies Special K's non-game-specific features to all Steam games "
     L"launched on your system.\r\n\r\n"
 
@@ -109,12 +111,15 @@ sk_product_t products [] =
     L"", L"Special K", // DLL ProductName
     L"NieR: Automata™",
     L"\"FAR\" (Fix Automata Res.)",
+    L"",
     L"FAR",
     L"H6SDVFMHZVUR6",
     524220,
     SK_64_BIT,
-    //SK_BOTH_BIT,
-    L"Fixes NieR: Automata™'s wonky resolution problems.",
+    false,
+    L"Fixes NieR: Automata™'s wonky resolution problems, Global Illumination "
+    L"performance, post-processing image quality, FMV stuttering, resource load "
+    L"hitches, mouse cursor problems, adds > 60 FPS mode and HUD free screenshots.",
     0
   },
 
@@ -123,11 +128,12 @@ sk_product_t products [] =
     L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
     L"Tales of Berseria",
     L"Tales of Berseria \"Fix\"",
+    L"",
     L"TBF",
     L"ALPEVA3UX74LL",
     429660,
     SK_64_BIT,
-    //SK_BOTH_BIT,
+    false,
     L"Adds texture mod support, custom button icons, improves "
     L"Namco's framerate limiter, enhances shadow quality, "
     L"adds anti-aliasing and input remapping support.",
@@ -139,11 +145,12 @@ sk_product_t products [] =
     L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
     L"Tales of Berseria (Demo)",
     L"Tales of Berseria (Demo) \"Fix\"",
+    L"",
     L"TBF",
     L"ALPEVA3UX74LL",
     550350,
     SK_64_BIT,
-    //SK_BOTH_BIT,
+    false,
     L"Adds texture mod support, custom button icons, improves "
     L"Namco's framerate limiter, enhances shadow quality, "
     L"adds anti-aliasing and input remapping support.",
@@ -155,11 +162,12 @@ sk_product_t products [] =
     L"tzfix.dll", L"Tales of Zestiria \"Fix\"", // DLL ProductName
     L"Tales of Zestiria",
     L"Tales of Zestiria \"Fix\"",
+    L"tzt.exe",
     L"TZF",
     L"X3AAFX8LJWNTU",
     351970,
     SK_32_BIT,
-    //SK_BOTH_BIT,
+    false,
     L"Adds 60 FPS support, enhances shadow quality, fixes texture aliasing,"
     L" adds aspect ratio correction and fixes multi-channel / high sample-rate audio stability.",
     0
@@ -170,11 +178,12 @@ sk_product_t products [] =
     L"tsfix.dll", L"Tales of Symphonia \"Fix\"", // DLL ProductName
     L"Tales of Symphonia",
     L"Tales of Symphonia \"Fix\"",
+    L"",
     L"TSF",
     L"WNZ6CYRYN3NVJ",
     372360,
     SK_32_BIT,
-    //SK_BOTH_BIT,
+    true,
     L"Adds MSAA, fixes Namco's framerate limiter, supports 4K textures, "
     L"fixes input-related problems.",
     0
@@ -186,6 +195,7 @@ sk_product_t products [] =
 #ifdef _WIN64
     L"Fallout 4",
     L"Fallout 4 \"Works\"",
+    L"",
     L"FO4W",
 #else
     L"",
@@ -195,8 +205,8 @@ sk_product_t products [] =
     L"", // N/A
     377160,
     SK_64_BIT,
-    //SK_BOTH_BIT,
 #ifdef _WIN64
+    false,
     L"Improves framepacing.\r\n\r\n"
     L"  (Use the Global Injector; Plug-In is built-in)",
 #else
@@ -210,11 +220,12 @@ sk_product_t products [] =
     L"PrettyPrinny.dll", L"Pretty Prinny", // DLL ProductName
     L"Disgaea PC",
     L"Pretty Prinny",
+    L"",
     L"PrettyPrinny",
     L"UYL32Y8H4K5H2",
     405900,
     SK_32_BIT,
-    //SK_BOTH_BIT,
+    false,
     L"Improves framepacing, optimizes post-processing, removes the 720p "
     L"resolution lock, adds borderless window and MSAA, supports custom "
     L"button icons.",
@@ -227,6 +238,7 @@ sk_product_t products [] =
 #ifdef _WIN64
     L"Dark Souls III",
     L"Souls \"Unsqueezed\"",
+    L"ds3t.exe",
     L"SoulsUnsqueezed",
 #else
     L"",
@@ -236,6 +248,7 @@ sk_product_t products [] =
     L"L9FJSV8WXMWRU",
     374320,
     SK_64_BIT,
+    false,
 #ifdef _WIN64
     L"Adds support for non-16:9 aspect ratios, texture memory optimizations "
     L"and multi-monitor rendering.\r\n",
@@ -250,12 +263,13 @@ sk_product_t products [] =
     L"UnX.dll", L"Untitled Project X", // DLL ProductName
     L"Final Fantasy X / X-2 HD Remaster",
     L"\"Untitled\" Project X",
+    L"UnX_Calibrate.exe",
     L"UnX",
     L"6TDLFVRGXLU92",
     359870,
     SK_32_BIT,
-    //SK_BOTH_BIT,
-    L"Adds dual-audio support, texture modding cutscene skipping in FFX, "
+    false,
+    L"Adds dual-audio support, texture modding, cutscene skipping in FFX, "
     L"cursor management, Intel GPU bypass, fullscreen exclusive mode, "
     L"maps all PC-specific extra features to gamepad.\n",
     0
@@ -402,6 +416,35 @@ SKIM_FixSlashes (wchar_t* wszInOut)
   wcscpy (wszInOut, wstr.c_str ());
 }
 
+std::vector <sk_product_t*>
+SKIM_GetInstallableProducts (void)
+{
+  std::vector <sk_product_t*> prods;
+
+  for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
+  {
+    int state = SKIM_DetermineInstallState (products [i]);
+    if (state != -1)
+    {
+      std::wstring path (SKIM_FindInstallPath (products [i].uiSteamAppID));
+
+      if (path.empty ())
+      {
+        continue;
+      }
+
+      else if (! wcscmp (L"<Invalid>", path.c_str ()))
+      {
+        continue;
+      }
+
+      prods.push_back (&products [i]);
+    }
+  }
+
+  return prods;
+}
+
 const wchar_t*
 SKIM_FindInstallPath (uint32_t appid)
 {
@@ -451,14 +494,14 @@ SKIM_FindInstallPath (uint32_t appid)
       lstrcpyW   (wszLibraryFolders, wszSteamPath);
       PathAppend (wszLibraryFolders, L"steamapps\\libraryfolders.vdf");
 
-      HANDLE hLibFolders =
+      CHandle hLibFolders (
         CreateFileW ( wszLibraryFolders,
                         GENERIC_READ,
                           FILE_SHARE_READ | FILE_SHARE_WRITE,
                             nullptr,
                               OPEN_EXISTING,
                                 GetFileAttributesW (wszLibraryFolders),
-                                  nullptr );
+                                  nullptr ) );
 
       if (hLibFolders != INVALID_HANDLE_VALUE)
       {
@@ -476,7 +519,6 @@ SKIM_FindInstallPath (uint32_t appid)
 
         if (data == nullptr)
         {
-          CloseHandle (hLibFolders);
           return nullptr;
         }
 
@@ -514,8 +556,6 @@ SKIM_FindInstallPath (uint32_t appid)
             }
           }
         }
-
-        CloseHandle (hLibFolders);
       }
     }
 
@@ -539,14 +579,14 @@ SKIM_FindInstallPath (uint32_t appid)
                     (char *)steam_lib_paths [i],
                       appid );
 
-      HANDLE hManifest =
+      CHandle hManifest (
         CreateFileA ( szManifest,
                       GENERIC_READ,
                         FILE_SHARE_READ | FILE_SHARE_WRITE,
                           nullptr,
                             OPEN_EXISTING,
                               GetFileAttributesA (szManifest),
-                                nullptr );
+                                nullptr ) );
 
       if (hManifest != INVALID_HANDLE_VALUE)
       {
@@ -565,7 +605,6 @@ SKIM_FindInstallPath (uint32_t appid)
 
         if (szManifestData == nullptr)
         {
-          CloseHandle (hManifest);
           return nullptr;
         }
 
@@ -574,8 +613,6 @@ SKIM_FindInstallPath (uint32_t appid)
                        dwSize,
                          &dwRead,
                            nullptr );
-
-        CloseHandle (hManifest);
 
         if (dwRead)
         {
@@ -622,14 +659,14 @@ SKIM_FindInstallPath (uint32_t appid)
                 wszSteamPath,
                   appid );
 
-  HANDLE hManifest =
+  CHandle hManifest (
     CreateFileA ( szManifest,
                   GENERIC_READ,
                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                       nullptr,
                         OPEN_EXISTING,
                           GetFileAttributesA (szManifest),
-                            nullptr );
+                            nullptr ) );
 
   if (hManifest != INVALID_HANDLE_VALUE)
   {
@@ -657,8 +694,6 @@ SKIM_FindInstallPath (uint32_t appid)
                    dwSize,
                      &dwRead,
                        nullptr );
-
-    CloseHandle (hManifest);
 
     if (! dwRead)
     {
@@ -1768,6 +1803,141 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
 
 
 
+unsigned int
+__stdcall
+SKIM_UpdateProduct (LPVOID user)
+{
+  sk_product_t* product = (sk_product_t *)user;
+
+  static int tries = 0;
+
+  // Disable installation of FO4W
+  if ( product->uiSteamAppID == 377160 ) {
+    CloseHandle (GetCurrentThread ());
+    return 0;
+  }
+
+  wchar_t wszInstallPath [MAX_PATH] = { };
+
+  wcscpy ( wszInstallPath,
+            SKIM_FindInstallPath (product->uiSteamAppID) );
+
+  wchar_t   wszVersionPath [MAX_PATH] = { };
+  wcscpy   (wszVersionPath, wszInstallPath);
+  lstrcatW (wszVersionPath, L"\\Version\\");
+
+  SKIM_Util_CreateDirectories (wszVersionPath);
+
+  SetCurrentDirectory (
+    SKIM_FindInstallPath (product->uiSteamAppID)
+  );
+
+  extern HWND hWndMainDlg;
+  ShowWindow (hWndMainDlg, SW_HIDE);
+
+  wchar_t wszInstallerDLL    [MAX_PATH] = { };
+  wchar_t wszInstallerBackup [MAX_PATH] = { };
+
+  wsprintf ( wszInstallerDLL,
+              L"%s\\%s",
+                wszInstallPath, product->wszWrapper );
+
+  wsprintf ( wszInstallerBackup,
+              L"%s\\%s.tmp",
+                wszInstallPath, product->wszWrapper );
+
+  if (GetFileAttributes (wszInstallPath) != INVALID_FILE_ATTRIBUTES)
+  {
+    MoveFileW (wszInstallPath, wszInstallerBackup);
+  }
+
+  bool bValidInstaller = 
+    SKIM_FetchInstallerDLL (*product);
+
+  HMODULE hModInstaller =
+    bValidInstaller ? LoadLibrary (wszInstallerDLL) : 0;
+
+
+  wchar_t wszRepoINI      [MAX_PATH] = { };
+
+  wsprintf ( wszRepoINI,
+               L"%s\\Version\\repository.ini",
+                 wszInstallPath );
+
+  DeleteFileW (wszRepoINI);
+
+
+  if (hModInstaller != nullptr)
+  {
+    typedef HRESULT (__stdcall *SK_UpdateSoftware_pfn)(const wchar_t* wszProduct);
+    typedef bool    (__stdcall *SK_FetchVersionInfo_pfn)(const wchar_t* wszProduct);
+
+    SK_UpdateSoftware_pfn SK_UpdateSoftware =
+      (SK_UpdateSoftware_pfn)
+        GetProcAddress ( hModInstaller,
+                          "SK_UpdateSoftware" );
+
+    SK_FetchVersionInfo_pfn SK_FetchVersionInfo =
+      (SK_FetchVersionInfo_pfn)
+        GetProcAddress ( hModInstaller,
+                        "SK_FetchVersionInfo" );
+
+    if ( SK_FetchVersionInfo != nullptr &&
+         SK_UpdateSoftware   != nullptr )
+    {
+      if (SK_FetchVersionInfo (product->wszRepoName))
+      {
+        if (FAILED (SK_UpdateSoftware (product->wszRepoName)))
+        {
+          SKIM_Util_MoveFileNoFail (wszInstallerBackup, wszInstallerDLL);
+        }
+      }
+
+      else
+      {
+        SKIM_Util_MoveFileNoFail (wszInstallerBackup, wszInstallerDLL);
+      }
+    }
+  }
+
+  // Give a second try, in case internet cache went kaput
+  else if (tries == 0)
+  {
+    ++tries;
+    DeleteFileW        (wszInstallerDLL);
+    SKIM_UpdateProduct (product);
+  }
+  
+
+  // Too many tries, give up.
+  else
+  {
+    tries = 0;
+    DeleteFileW (wszInstallerDLL);
+    MoveFileW   (wszInstallerBackup, wszInstallerDLL);
+  }
+
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnProductSelect          ();
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnBranchSelect           ();
+
+  ShowWindow          (hWndMainDlg, SW_SHOW);
+  SetForegroundWindow (hWndMainDlg);
+  SendMessage         (hWndMainDlg, WM_INITDIALOG, 0x00, 0x00);
+
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnProductSelect          ();
+  SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
+  SKIM_OnBranchSelect           ();
+
+  CloseHandle (GetCurrentThread ());
+
+  return 0;
+}
+
+
+
 #include <Windows.h>
 #include <WindowsX.h>
 HWND hWndMainDlg;
@@ -1892,7 +2062,7 @@ SKIM_SummarizeRenderAPI (sk_product_t& product)
   return ret;
 }
 
-static int last_sel = 0;
+int last_sel = 0;
 
 RECT
 SKIM_GetHWNDRect (HWND hWnd)
@@ -2153,6 +2323,13 @@ SKIM_OnProductSelect (void)
 
   ComboBox_ResetContent (hWndBranchSelect);
   SKIM_OnBranchSelect ();
+
+  void
+  SKIM_Tray_ResetMenu (void);
+  SKIM_Tray_ResetMenu ();
+
+  SKIM_Tray_Init          (hWndMainDlg);
+  SKIM_Tray_UpdateProduct (&products [sel]);
 }
 
 bool
@@ -2278,6 +2455,15 @@ Main_DlgProc (
 
     case WM_COMMAND:
     {
+      //switch (HIWORD (wParam))
+      //{
+      //  case 0:
+      //    SKIM_Tray_ProcessCommand (hWndDlg, lParam, wParam);
+      //    break;
+      //  default:
+      //    break;
+      //};
+
       switch (LOWORD (wParam))
       {
         case IDC_PRODUCT_SELECT:
@@ -2603,11 +2789,32 @@ Main_DlgProc (
   return (INT_PTR)false;
 }
 
+int
+SKIM_GetProductIdx (sk_product_t* prod)
+{
+  for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
+  {
+    if (products [i].uiSteamAppID == prod->uiSteamAppID)
+      return i;
+  }
+
+  return -1;
+}
+
+sk_product_t*
+SKIM_GetProductByIdx (int idx)
+{
+  if ((unsigned int)idx < sizeof (products) / sizeof (sk_product_t))
+    return &products [idx];
+
+  return nullptr;
+}
+
 sk_product_t*
 SKIM_FindProductByAppID (uint32_t appid)
 {
   for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
-{
+  {
     if (products [i].uiSteamAppID == appid)
       return &products [i];
   }
@@ -2723,10 +2930,12 @@ SKIM_MigrateGlobalInjector (LPVOID user)
       L"Special K",
       L"Special K",
       L"Special K (Global Injector)",
+      L"",
       L"SpecialK",
       L"8A7FSUFJ6KB2U",
       0,
       SK_BOTH_BIT,
+      false,
       nullptr,
       0
     };
@@ -2738,10 +2947,12 @@ SKIM_MigrateGlobalInjector (LPVOID user)
       L"Special K",
       L"Special K",
       L"Special K (Global Injector)",
+      L"",
       L"SpecialK",
       L"8A7FSUFJ6KB2U",
       0,
       SK_BOTH_BIT,
+      false,
       nullptr,
       0
     };
@@ -2890,10 +3101,12 @@ SKIM_InstallGlobalInjector (LPVOID user)
       L"Special K",
       L"Special K",
       L"Special K (Global Injector)",
+      L"",
       L"SpecialK/0.8.x",
       L"8A7FSUFJ6KB2U",
       0,
       SK_BOTH_BIT,
+      false,
       nullptr,
       0
     };

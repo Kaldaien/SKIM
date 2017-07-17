@@ -39,11 +39,16 @@ void SKIM_Util_DeleteConfigFiles (sk_product_t*  product);
 unsigned int __stdcall SKIM_MigrateProduct   (LPVOID user);
 unsigned int __stdcall SKIM_InstallProduct   (LPVOID user);
 unsigned int __stdcall SKIM_UninstallProduct (LPVOID user);
+unsigned int __stdcall SKIM_UpdateProduct    (LPVOID user);
 
 DWORD                       SKIM_CountProductBranches  (sk_product_t *pProduct);
 SKIM_BranchManager::Branch* SKIM_GetProductBranchByIdx (sk_product_t *pProduct, int idx);
 bool                        SKIM_DetermineInstallState (sk_product_t& product);
 std::wstring                SKIM_SummarizeRenderAPI    (sk_product_t& product);
+
+int                         SKIM_GetProductIdx          (sk_product_t* prod);
+sk_product_t*               SKIM_GetProductByIdx        (int idx);
+std::vector <sk_product_t*> SKIM_GetInstallableProducts (void);
 
 RECT SKIM_GetHWNDRect    (HWND hWnd);
 RECT SKIM_GetClientRect  (HWND hWnd);

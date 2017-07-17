@@ -1,4 +1,6 @@
 #define NOMINMAX
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <Windows.h>
 
 #include <cstdint>
@@ -12,6 +14,7 @@
 #include "resource.h"
 
 #include <queue>
+#include <atlbase.h>
 
 #include <CommCtrl.h>
 #pragma comment (lib,    "advapi32.lib")
@@ -107,7 +110,7 @@ UNREFERENCED_PARAMETER (product);
       if (dwAttribs == INVALID_FILE_ATTRIBUTES)
         dwAttribs = FILE_ATTRIBUTE_NORMAL;
 
-      HANDLE hVersionFile =
+      CHandle hVersionFile (
         CreateFileW ( wszRemoteFile,
                         GENERIC_READ | GENERIC_WRITE,
                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -115,14 +118,14 @@ UNREFERENCED_PARAMETER (product);
                               CREATE_ALWAYS,
                                 dwAttribs |
                                 FILE_FLAG_SEQUENTIAL_SCAN,
-                                  nullptr );
+                                  nullptr ) );
 
       while (hVersionFile != INVALID_HANDLE_VALUE && dwSize > 0)
       {
         DWORD    dwRead = 0;
-        uint8_t *pData  = (uint8_t *)malloc (dwSize);
 
-        if (! pData)
+        CHeapPtr <uint8_t> pData;
+        if (! pData.Allocate (dwSize))
           break;
 
         if ( InternetReadFile ( hInetGitHubOpen,
@@ -140,18 +143,12 @@ UNREFERENCED_PARAMETER (product);
                               nullptr );
         }
 
-        free (pData);
-        pData = nullptr;
-
         if (! InternetQueryDataAvailable ( hInetGitHubOpen,
                                              &dwSize,
                                                0x00, NULL
                                          )
            ) break;
       }
-
-      if (hVersionFile != INVALID_HANDLE_VALUE)
-        CloseHandle (hVersionFile);
     }
 
     HttpEndRequest ( hInetGitHubOpen, nullptr, 0x00, 0 );
@@ -205,12 +202,12 @@ static uint64_t           total_fetched_bytes = 0ULL;
 static uint32_t           file_fetched_size   = 0UL;
 static uint32_t           file_fetched_bytes  = 0UL;
 
-static HWND   hWndDownloadDialog = 0;
-static HANDLE hWorkerThread      = 0;
-static HANDLE hTerminateEvent    = 0;
+static HWND               hWndDownloadDialog  = 0;
+static HANDLE             hWorkerThread       = 0;
+static HANDLE             hTerminateEvent     = 0;
 
-static HWND hWndFileProgress;
-static HWND hWndTotalProgress;
+static HWND               hWndFileProgress;
+static HWND               hWndTotalProgress;
 
 struct {
   HWND     hWndCtl;
@@ -557,7 +554,7 @@ DownloadThread (LPVOID user)
                                           0x00, NULL )
       )
     {
-      HANDLE hGetFile =
+      CHandle hGetFile (
         CreateFileW ( get->wszLocalPath,
                         GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE,
                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -565,7 +562,7 @@ DownloadThread (LPVOID user)
                               CREATE_ALWAYS,
                                 FILE_ATTRIBUTE_NORMAL |
                                 FILE_FLAG_SEQUENTIAL_SCAN,
-                                  nullptr );
+                                  nullptr ) );
 
       while (hGetFile != INVALID_HANDLE_VALUE && dwSize > 0) {
         if (WaitForSingleObject (hTerminateEvent, 0) == WAIT_OBJECT_0) {
@@ -573,9 +570,10 @@ DownloadThread (LPVOID user)
         }
 
         DWORD    dwRead = 0;
-        uint8_t *pData  = (uint8_t *)malloc (dwSize);
 
-        if (! pData)
+        CHeapPtr <uint8_t> (pData);
+
+        if (! pData.Allocate (dwSize))
           break;
 
         if ( InternetReadFile ( hInetHTTPGetReq,
@@ -598,9 +596,6 @@ DownloadThread (LPVOID user)
           SendMessage (hWndDownloadDialog, WM_FILE_PROGRESS, dwRead,                 0);
         }
 
-        free (pData);
-        pData = nullptr;
-
         if (! InternetQueryDataAvailable ( hInetHTTPGetReq,
                                              &dwSize,
                                                0x00, NULL
@@ -609,9 +604,6 @@ DownloadThread (LPVOID user)
           break;
         }
       }
-
-      if (hGetFile != INVALID_HANDLE_VALUE)
-        CloseHandle (hGetFile);
 
       if (WaitForSingleObject (hTerminateEvent, 0) != WAIT_OBJECT_0)
         SendMessage (hWndDownloadDialog, WM_FILE_DONE, 0, 0);
@@ -959,7 +951,10 @@ L"injector64.dll"
 #endif
 )
 {
-  SKIM_Util_MoveFileNoFail (product.wszWrapper, L"Version/wrapper.old");
+  wchar_t wszOld [MAX_PATH * 2] = { };
+  swprintf (wszOld, L"Version/%s.old", wszRemoteFile);
+
+  SKIM_Util_MoveFileNoFail (product.wszWrapper, wszOld);
 
   wchar_t wszRemoteRepoURL [MAX_PATH * 2] = { };
 
@@ -974,15 +969,25 @@ L"injector64.dll"
   wcscpy (get.wszHostName,  L"raw.githubusercontent.com");
   wcscpy (get.wszHostPath,  wszRemoteRepoURL);
 
-  wcscpy (head.wszHostName,  L"raw.githubusercontent.com");
-  wcscpy (head.wszHostPath,  wszRemoteRepoURL);
+  wcscpy (head.wszHostName, L"raw.githubusercontent.com");
+  wcscpy (head.wszHostPath, wszRemoteRepoURL);
 
   files_to_fetch.push       (get);
   files_to_lookup.push_back (head);
 
   SKIM_Download_Thread (nullptr);
 
-  Sleep (250UL);
+  HANDLE hFile = 0;
+
+  while (hFile == 0)
+  {
+    hFile = CreateFileW (product.wszWrapper, GENERIC_READ | GENERIC_EXECUTE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, GetFileAttributes (product.wszWrapper), nullptr);
+
+    if (hFile == 0)
+      Sleep (133UL);
+  }
+
+  CloseHandle (hFile);
 
   return true;
 }

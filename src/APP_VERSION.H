@@ -3,8 +3,8 @@
 
 #define SKIM_MAJOR 0
 #define SKIM_MINOR 7
-#define SKIM_BUILD 4
-#define SKIM_REV   2
+#define SKIM_BUILD 5
+#define SKIM_REV   1
 
 
 

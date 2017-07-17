@@ -31,6 +31,10 @@ public:
     return pMgr;
   }
 
+  uint32_t getProduct (void) {
+    return product_.app_id;
+  }
+
   void setProduct (uint32_t uiAppID) {
     if (product_.app_id == uiAppID)
       return;

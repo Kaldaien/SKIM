@@ -91,19 +91,33 @@ SKIM_GlobalInject_Start (void)
 {
   if (SKIM_GlobalInject_Load ())
   {
+    if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
+    {
+      if (GetFileAttributes (L"SpecialK32.pid") == INVALID_FILE_ATTRIBUTES)
+      {
+        wchar_t wszPath     [MAX_PATH * 2] = { };
+        wchar_t wszFullPath [MAX_PATH * 2] = { };
+
+        GetCurrentDirectoryW     (MAX_PATH * 2 - 1, wszPath);
+        GetSystemWow64DirectoryW (wszFullPath, MAX_PATH * 2 -1);
+
+        PathAppendW   (wszFullPath, L"rundll32.exe");
+        ShellExecuteW (nullptr, L"open", wszFullPath, L"SpecialK32.dll,RunDLL_InjectionManager Install", wszPath, SW_HIDE);
+
+        while (GetFileAttributes (L"SpecialK32.pid") == INVALID_FILE_ATTRIBUTES)
+        {
+          Sleep (133UL);
+        }
+      }
+    }
+
     if (! SKX_IsHookingCBT ())
     {
       SKX_InstallCBTHook ();
-  
-      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
-        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Install", nullptr, SW_HIDE );
 
       if (SKX_IsHookingCBT ())
         return true;
     }
-
-    else
-      return false;
   }
 
   return false;
@@ -348,23 +362,40 @@ SKIM_SetStartMenuLink (bool enable, wchar_t* wszExecutable)
 bool
 SKIM_GlobalInject_Stop (bool confirm)
 {
+  if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
+  {
+    if (GetFileAttributes (L"SpecialK32.pid") != INVALID_FILE_ATTRIBUTES)
+    {
+      wchar_t wszPath     [MAX_PATH * 2] = { };
+      wchar_t wszFullPath [MAX_PATH * 2] = { };
+
+      GetCurrentDirectoryW     (MAX_PATH * 2 - 1, wszPath);
+      GetSystemWow64DirectoryW (wszFullPath, MAX_PATH * 2 -1);
+
+      PathAppendW   (wszFullPath, L"rundll32.exe");
+      ShellExecuteW (nullptr, L"open", wszFullPath, L"SpecialK32.dll,RunDLL_InjectionManager Remove", wszPath, SW_HIDE);
+
+      int tries = 0;
+
+      while (GetFileAttributes (L"SpecialK32.pid") != INVALID_FILE_ATTRIBUTES)
+      {
+        Sleep (133UL);
+        ++tries;
+
+        if (tries > 3)
+          DeleteFileW (L"SpecialK32.pid");
+      }
+    }
+  }
+
   if (SKIM_GlobalInject_Load ())
   {
     if (SKX_IsHookingCBT ())
     {
       SKX_RemoveCBTHook ();
-  
-      if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
-        ShellExecuteA ( NULL, "open", "rundll32.exe", "SpecialK32.dll,RunDLL_InjectionManager Remove", nullptr, SW_HIDE );
-
-      //if (! SKX_IsHookingCBT ())
-        return true;
 
       //return false;
     }
-
-    else
-      return true;
   }
 
   return true;
@@ -417,8 +448,8 @@ SKIM_GlobalInject_StartStop (HWND hWndDlg, bool confirm)
 size_t
 SKIM_SummarizeInjectedPIDs (std::wstring& out)
 {
-  int count = SKX_GetInjectedPIDs ?
-                SKX_GetInjectedPIDs (nullptr, 0) : 0;
+  size_t count = SKX_GetInjectedPIDs ?
+                   SKX_GetInjectedPIDs (nullptr, 0) : 0;
 
   DWORD   dwPIDs      [128]      = { };
   wchar_t wszFileName [MAX_PATH] = { };
@@ -429,10 +460,11 @@ SKIM_SummarizeInjectedPIDs (std::wstring& out)
 
     for (int i = 0; i < count; i++)
     {
-      HANDLE hProc =
+      CHandle hProc (
         OpenProcess ( PROCESS_QUERY_INFORMATION,
                         FALSE,
-                          dwPIDs [i] );
+                          dwPIDs [i] )
+      );
 
       if (hProc != NULL)
       {
@@ -443,8 +475,6 @@ SKIM_SummarizeInjectedPIDs (std::wstring& out)
 
         out += L"\n  ";
         out += wszFileName;
-
-        CloseHandle (hProc);
       }
     }
   }

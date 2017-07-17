@@ -13,11 +13,21 @@ struct sk_product_t {
   wchar_t         wszDLLProductName [128];
   wchar_t         wszGameName       [128];
   wchar_t         wszProjectName    [128];
+  wchar_t         wszConfigTool     [128];
   wchar_t         wszRepoName       [32];
   wchar_t         wszDonateID       [16];
   uint32_t        uiSteamAppID;
   SK_ARCHITECTURE architecture;
+  bool            bHasDLC;
   wchar_t*        wszDescription;
 
   int32_t         install_state; // To be filled-in later
+
+  struct
+  {
+    HMENU hProductMenu = nullptr;
+    HMENU hUtilMenu    = nullptr;
+    HMENU hFileMenu    = nullptr;
+    HMENU hBranchMenu  = nullptr;
+  } menus;
 };

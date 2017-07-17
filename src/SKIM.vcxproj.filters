@@ -38,5 +38,18 @@
     <Image Include="..\tray.ico" />
     <Image Include="..\exit.bmp" />
     <Image Include="..\start.bmp" />
+    <Image Include="..\stop.bmp" />
+    <Image Include="..\backup.bmp" />
+    <Image Include="..\branch.bmp" />
+    <Image Include="..\folder.bmp" />
+    <Image Include="..\info.bmp" />
+    <Image Include="..\install.bmp" />
+    <Image Include="..\logs.bmp" />
+    <Image Include="..\menu.bmp" />
+    <Image Include="..\release_notes.bmp" />
+    <Image Include="..\uninstall.bmp" />
+    <Image Include="..\update.bmp" />
+    <Image Include="..\utilities.bmp" />
+    <Image Include="..\config.bmp" />
   </ItemGroup>
 </Project>
