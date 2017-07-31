@@ -1,27 +1,10 @@
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_NON_CONFORMING_WCSTOK
-#define _CRT_NON_CONFORMING_SWPRINTFS
-
-#pragma warning (disable: 4091)
-
 #include "stdafx.h"
 
 #include "resource.h"
 
-#include <cstdint>
-
 #include <string>
 #include <memory>
 #include <algorithm>
-
-#include <ShellAPI.h>
-#include <CommCtrl.h>
-
-#include <Shlobj.h>
-#include <Shlwapi.h>
-#include <shobjidl.h>
-#include <shlguid.h>
-#include <atlbase.h>
 
 HMODULE hModGlobal = 0;//LoadLibrary (L"SpecialK64.dll");
 

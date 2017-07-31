@@ -1,53 +1,11 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_NON_CONFORMING_WCSTOK
-#define _CRT_NON_CONFORMING_SWPRINTFS
-
-#pragma warning (disable: 4091)
-
 #include "stdafx.h"
-
-#include <ShellAPI.h>
-
-#include <CommCtrl.h>
-
-#include <process.h>
-#include <tlhelp32.h>
-
-#include <Shlobj.h>
-#pragma comment (lib, "shell32.lib")
-#pragma comment (lib, "Ole32.lib")
-
-#include <Shlwapi.h>
-#pragma comment (lib, "shlwapi.lib")
-
-#include <cstdint>
 
 #include <string>
 #include <memory>
 #include <algorithm>
 
-#pragma comment (lib,    "advapi32.lib")
-#pragma comment (lib,    "user32.lib")
-#pragma comment (lib,    "comctl32.lib")
-#pragma comment (linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' "  \
-                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df'" \
-                         " language='*'\"")
-#include "winbase.h"
-
-#include <WindowsX.h>
 #include <time.h>
-
-#include <Msi.h>
-#pragma comment (lib, "msi.lib")
-
-#include <MMSystem.h>
-#include <Winver.h>
-//#pragma comment (lib, "Mincore_Downlevel.lib") // Windows 8     (Delay-Load)
-#pragma comment (lib, "version.lib")             // Windows 2000+ (Normal Import)
-#include <Richedit.h>
-
-#define NOMINMAX
 
 #include "system_tray.h"
 #include "injection.h"
@@ -61,15 +19,12 @@
 #include "SKIM.h"
 
 
-HICON       hIconSKIM_LG;
-HICON       hIconSKIM_SM;
-
-HINSTANCE g_hInstance;
-
-HWND        hWndRestart = 0;
-
-bool child = false;
-wchar_t startup_dir [MAX_PATH + 1] = { };
+HICON           hIconSKIM_LG;
+HICON           hIconSKIM_SM;
+HINSTANCE       g_hInstance;
+HWND            hWndRestart                = 0;
+bool            child                      = false;
+wchar_t         startup_dir [MAX_PATH + 1] = { };
 
 unsigned int
 __stdcall
@@ -107,12 +62,12 @@ sk_product_t products [] =
   },
 
   {
-    L"dxgi.dll",
+    L"dinput8.dll",
     L"", L"Special K", // DLL ProductName
     L"NieR: Automata™",
     L"\"FAR\" (Fix Automata Res.)",
     L"",
-    L"FAR",
+    L"FAR/dinput8",
     L"H6SDVFMHZVUR6",
     524220,
     SK_64_BIT,
@@ -346,7 +301,7 @@ SKIM_Util_DeleteTemporaryFiles (const wchar_t* wszPath, const wchar_t* wszPatter
 bool
 SKIM_Util_CreateDirectories ( const wchar_t* wszPath )
 {
-  wchar_t* wszSubDir = _wcsdup (wszPath), *iter;
+  wchar_t* wszSubDir        = _wcsdup (wszPath), *iter;
 
   wchar_t* wszLastSlash     = wcsrchr (wszSubDir, L'/');
   wchar_t* wszLastBackslash = wcsrchr (wszSubDir, L'\\');
@@ -763,26 +718,26 @@ SKIM_IsDLLFromProduct (const wchar_t* wszName, const wchar_t* wszProductName)
   if (GetFileAttributes (wszFullyQualifiedName) == INVALID_FILE_ATTRIBUTES)
     return false;
 
-  GetFileVersionInfoEx ( FILE_VER_GET_NEUTRAL | FILE_VER_GET_PREFETCHED,
-                           wszFullyQualifiedName,
-                             0x00,
-                               4096,
-                                 cbData );
+  GetFileVersionInfoExW ( FILE_VER_GET_NEUTRAL | FILE_VER_GET_PREFETCHED,
+                            wszFullyQualifiedName,
+                              0x00,
+                                4096,
+                                  cbData );
 
-  if (VerQueryValue ( cbData,
-                      TEXT ("\\VarFileInfo\\Translation"),
-                        (LPVOID *)&lpTranslate,
-                                  &cbTranslatedBytes ) && cbTranslatedBytes)
+  if (VerQueryValueW ( cbData,
+                         TEXT ("\\VarFileInfo\\Translation"),
+                           (LPVOID *)&lpTranslate,
+                                     &cbTranslatedBytes ) && cbTranslatedBytes)
   {
     wsprintfW ( wszPropName,
                   L"\\StringFileInfo\\%04x%04x\\ProductName",
                     lpTranslate [0].wLanguage,
                       lpTranslate [0].wCodePage );
 
-    VerQueryValue ( cbData,
-                      wszPropName,
-                        (LPVOID *)&wszProduct,
-                                  &cbProductBytes );
+    VerQueryValueW ( cbData,
+                       wszPropName,
+                         (LPVOID *)&wszProduct,
+                                   &cbProductBytes );
 
     return (cbProductBytes && (! wcscmp (wszProduct, wszProductName)));
   }
@@ -934,7 +889,7 @@ SKIM_Depends_TestVisualCRuntime (SK_ARCHITECTURE arch)
                0,
                  vcredist2015_any_productcode_x64 ) == ERROR_SUCCESS ) {
       return lstrlenW (vcredist2015_any_productcode_x64) &&
-              MsiQueryProductState (vcredist2015_any_productcode_x64) ==
+              MsiQueryProductStateW (vcredist2015_any_productcode_x64) ==
                 INSTALLSTATE_DEFAULT;
     }
 
@@ -955,7 +910,7 @@ SKIM_Depends_TestVisualCRuntime (SK_ARCHITECTURE arch)
                0,
                  vcredist2015_any_productcode ) == ERROR_SUCCESS ) {
       return lstrlenW (vcredist2015_any_productcode) &&
-              MsiQueryProductState (vcredist2015_any_productcode) ==
+              MsiQueryProductStateW (vcredist2015_any_productcode) ==
                 INSTALLSTATE_DEFAULT;
     }
 
@@ -1843,28 +1798,35 @@ SKIM_UpdateProduct (LPVOID user)
                 wszInstallPath, product->wszWrapper );
 
   wsprintf ( wszInstallerBackup,
-              L"%s\\%s.tmp",
+              L"%s\\Version\\%s.old",
                 wszInstallPath, product->wszWrapper );
 
   if (GetFileAttributes (wszInstallPath) != INVALID_FILE_ATTRIBUTES)
   {
-    MoveFileW (wszInstallPath, wszInstallerBackup);
+    MoveFileW (wszInstallerDLL, wszInstallerBackup);
   }
 
   bool bValidInstaller = 
-    SKIM_FetchInstallerDLL (*product);
+    LoadLibrary (wszInstallerBackup) ||
+      SKIM_FetchInstallerDLL (*product);
 
   HMODULE hModInstaller =
-    bValidInstaller ? LoadLibrary (wszInstallerDLL) : 0;
+    bValidInstaller ? LoadLibrary (wszInstallerBackup) :
+                      LoadLibrary (wszInstallerDLL);
 
 
-  wchar_t wszRepoINI      [MAX_PATH] = { };
+  wchar_t wszRepoINI    [MAX_PATH] = { };
+  wchar_t wszRepoBackup [MAX_PATH] = { };
 
   wsprintf ( wszRepoINI,
                L"%s\\Version\\repository.ini",
                  wszInstallPath );
 
-  DeleteFileW (wszRepoINI);
+  wsprintf ( wszRepoBackup,
+               L"%s\\Version\\repository.ini.old",
+                 wszInstallPath );
+
+  SKIM_Util_MoveFileNoFail (wszRepoINI, wszRepoBackup);
 
 
   if (hModInstaller != nullptr)
@@ -1885,36 +1847,22 @@ SKIM_UpdateProduct (LPVOID user)
     if ( SK_FetchVersionInfo != nullptr &&
          SK_UpdateSoftware   != nullptr )
     {
+      bool update_available = false;
+
       if (SK_FetchVersionInfo (product->wszRepoName))
       {
-        if (FAILED (SK_UpdateSoftware (product->wszRepoName)))
+        if (S_OK == SK_UpdateSoftware (product->wszRepoName))
         {
-          SKIM_Util_MoveFileNoFail (wszInstallerBackup, wszInstallerDLL);
+          update_available = true;
         }
       }
 
-      else
+      if (! update_available)
       {
         SKIM_Util_MoveFileNoFail (wszInstallerBackup, wszInstallerDLL);
+        SKIM_Util_MoveFileNoFail (wszRepoBackup,      wszRepoINI);
       }
     }
-  }
-
-  // Give a second try, in case internet cache went kaput
-  else if (tries == 0)
-  {
-    ++tries;
-    DeleteFileW        (wszInstallerDLL);
-    SKIM_UpdateProduct (product);
-  }
-  
-
-  // Too many tries, give up.
-  else
-  {
-    tries = 0;
-    DeleteFileW (wszInstallerDLL);
-    MoveFileW   (wszInstallerBackup, wszInstallerDLL);
   }
 
   SKIM_BranchManager::singleton ()->setProduct ((uint32_t)-1);
@@ -2033,8 +1981,10 @@ SKIM_SummarizeRenderAPI (sk_product_t& product)
 
   if (! _wcsicmp (product.wszWrapper, L"d3d9.dll"))
     ret += L"Direct3D 9";
-  else if (! _wcsicmp (product.wszWrapper, L"dxgi.dll")) {
-    if (! _wcsicmp (product.wszRepoName, L"UnX"))
+
+  else if (! _wcsicmp (product.wszWrapper, L"dxgi.dll"))
+  {
+     if (! _wcsicmp (product.wszRepoName, L"UnX"))
       ret += L"Direct3D 11";
     else if ( (! _wcsicmp (product.wszRepoName, L"FO4W")) ||
               (! _wcsicmp (product.wszRepoName, L"SoulsUnsqueezed")) ||
@@ -2051,6 +2001,8 @@ SKIM_SummarizeRenderAPI (sk_product_t& product)
   else if (! _wcsicmp (product.wszWrapper, L"SpecialK64.dll"))
 #endif
     ret += L"GL/D3D9/11/12/Vulkan";
+  else if ( !_wcsicmp (product.wszRepoName, L"FAR/dinput8") )
+      ret += L"Direct3D 11";
 
   if (product.architecture == SK_32_BIT)
     ret += L" (32-bit)";
@@ -3268,6 +3220,26 @@ wWinMain ( _In_     HINSTANCE hInstance,
            _In_     LPWSTR    lpCmdLine,
            _In_     int       nCmdShow )
 {
+  timeGetTime =
+    (timeGetTime_pfn)GetProcAddress ( GetModuleHandle (L"kernel32.dll"),
+                                        "timeGetTime" );
+
+  VerQueryValueW =
+    (VerQueryValueW_pfn)GetProcAddress ( LoadLibrary (L"Version.dll"),
+                                           "VerQueryValueW" );
+
+  GetFileVersionInfoExW =
+    (GetFileVersionInfoExW_pfn)GetProcAddress ( LoadLibrary (L"Version.dll"),
+                                                  "GetFileVersionInfoExW" );
+
+  MsiQueryProductStateW =
+    (MsiQueryProductStateW_pfn)GetProcAddress ( LoadLibrary (L"msi.dll"),
+                                                  "MsiQueryProductStateW" );
+
+  MsiEnumRelatedProductsW =
+    (MsiEnumRelatedProductsW_pfn)GetProcAddress ( LoadLibrary (L"msi.dll"),
+                                                    "MsiEnumRelatedProductsW" );
+
   CoInitializeEx (nullptr, COINIT_MULTITHREADED);
 
   g_hInstance    =                   hInstance;

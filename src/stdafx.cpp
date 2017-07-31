@@ -4,5 +4,8 @@
 
 #include "stdafx.h"
 
-// TODO: reference any additional headers you need in STDAFX.H
-// and not in this file
+timeGetTime_pfn             timeGetTime             = nullptr;
+VerQueryValueW_pfn          VerQueryValueW          = nullptr;
+GetFileVersionInfoExW_pfn   GetFileVersionInfoExW   = nullptr;
+MsiEnumRelatedProductsW_pfn MsiEnumRelatedProductsW = nullptr;
+MsiQueryProductStateW_pfn   MsiQueryProductStateW   = nullptr;

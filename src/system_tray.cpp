@@ -8,21 +8,9 @@
 
 #include "resource.h"
 
-#include <cstdint>
-
 #include <string>
 #include <memory>
 #include <algorithm>
-
-#include <ShellAPI.h>
-#include <CommCtrl.h>
-#include <WindowsX.h>
-
-#include <Shlobj.h>
-#include <Shlwapi.h>
-#include <shobjidl.h>
-#include <shlguid.h>
-#include <atlbase.h>
 
 #include "system_tray.h"
 #include "injection.h"

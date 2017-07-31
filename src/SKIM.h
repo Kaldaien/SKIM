@@ -7,7 +7,7 @@
 
 #pragma warning (disable: 4091)
 
-#include <Windows.h>
+#include "stdafx.h"
 #include <cstdint>
 
 extern HINSTANCE g_hInstance;
@@ -81,8 +81,5 @@ sk_product_t* SKIM_FindProductByAppID    (uint32_t appid);
 void          SKIM_DisableGlobalInjector (void);
 
 
-//
-// XXX: This needs re-writing for 0.8.x
-//
 unsigned int __stdcall SKIM_MigrateGlobalInjector (LPVOID user);
 unsigned int __stdcall SKIM_InstallGlobalInjector (LPVOID user);

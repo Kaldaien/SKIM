@@ -18,10 +18,8 @@
  *   If not, see <http://www.gnu.org/licenses/>.
  *
 **/
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_NON_CONFORMING_SWPRINTFS
+#include "stdafx.h"
 
-#include <windows.h>
 #include <string>
 #include <sys/stat.h>
 

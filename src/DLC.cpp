@@ -18,36 +18,14 @@
  *   If not, see <http://www.gnu.org/licenses/>.
  *
 **/
-#define _CRT_NON_CONFORMING_SWPRINTFS
-#define _CRT_SECURE_NO_WARNINGS
-#define ISOLATION_AWARE_ENABLED 1
+#include "stdafx.h"
 
-#pragma warning (disable: 4723)
-
-
-#include <Windows.h>
-#include <windowsx.h>
+#include <Wininet.h>
+#pragma comment (lib, "wininet.lib")
 
 #include <algorithm>
 #include <limits>
-
-#include <CommCtrl.h>
-#pragma comment (lib,    "advapi32.lib")
-#pragma comment (lib,    "user32.lib")
-#pragma comment (lib,    "comctl32.lib")
-#pragma comment (linker, "/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' "  \
-                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df'" \
-                         " language='*'\"")
-#pragma comment (lib,    "winmm.lib")
-
-#include <process.h>
-#include <cstdint>
-
 #include <cstdio>
-
-#include <Windows.h>
-#include <Wininet.h>
-#pragma comment (lib, "wininet.lib")
 
 #include "resource.h"
 
