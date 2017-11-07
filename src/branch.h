@@ -7,9 +7,15 @@
 extern const wchar_t*
 SKIM_FindInstallPath (uint32_t appid);
 
-class SKIM_BranchManager {
+iSK_INI*
+__stdcall
+SK_CreateINI (const wchar_t* const wszName);
+
+class SKIM_BranchManager
+{
 public:
-  class Branch {
+  class Branch
+  {
   public:
     std::wstring description;
     std::wstring name;
@@ -22,7 +28,8 @@ public:
   ~SKIM_BranchManager (void) {
   }
 
-  static SKIM_BranchManager* singleton (void) {
+  static SKIM_BranchManager* singleton (void)
+  {
     static SKIM_BranchManager* pMgr = nullptr;
 
     if (pMgr == nullptr)
@@ -31,11 +38,13 @@ public:
     return pMgr;
   }
 
-  uint32_t getProduct (void) {
+  uint32_t getProduct (void)
+  {
     return product_.app_id;
   }
 
-  void setProduct (uint32_t uiAppID) {
+  void setProduct (uint32_t uiAppID)
+  {
     if (product_.app_id == uiAppID)
       return;
 
@@ -43,50 +52,64 @@ public:
     product_.reset ();
   }
 
-  std::wstring getInstallPackage (void) {
+  std::wstring getInstallPackage (void)
+  {
     return product_.install_package;
   }
 
-  Branch* getBranch (const wchar_t* wszName) {
+  Branch* getBranch (const wchar_t* wszName)
+  {
     return product_.getBranch (wszName);
   }
 
-  Branch* getCurrentBranch (void) const {
-    return product_.getCurrentBranch ();
+  Branch* getCurrentBranch (void) const
+  {
+    static Branch dummy = { L"Main", L"Main" };
+
+    return product_.getCurrentBranch () ? product_.getCurrentBranch () :
+                                          &dummy;
   }
 
-  Branch* getBranchByIndex (uint32_t idx) {
+  Branch* getBranchByIndex (uint32_t idx)
+  {
     if (getNumberOfBranches () > idx)
       return &product_.branches [idx];
 
     return nullptr;
   }
 
-  uint32_t getNumberOfBranches (void) {
+  uint32_t getNumberOfBranches (void)
+  {
     return product_.getCount ();
   }
 
-  bool migrateToBranch (const wchar_t* wszName) {
+  bool migrateToBranch (const wchar_t* wszName)
+  {
     return product_.migrateToBranch (wszName);
   }
 
 protected:
-  struct branch_list_s {
-    void reset (void) {
+  struct branch_list_s
+  {
+    void reset (void)
+    {
       active_branch = nullptr;
       branches.clear ();
 
-      if (installed_.ini != nullptr) {
-        delete installed_.ini;
+      if (installed_.ini != nullptr)
+      {
+        //delete installed_.ini;
                installed_.ini = nullptr;
       }
 
-      if (repo_.ini != nullptr) {
-        delete repo_.ini;
+      if (repo_.ini != nullptr)
+      {
+        //delete repo_.ini;
                repo_.ini = nullptr;
       }
 
-      if (app_id != UINT32_MAX) {
+      if (app_id != UINT32_MAX)
+      {
         const wchar_t* wszInstallPath =
           SKIM_FindInstallPath (app_id);
 
@@ -102,11 +125,8 @@ protected:
         installed_.path = wszInstalledINI;
         repo_.path      = wszRepoINI;
 
-        installed_.ini = new iSK_INI (installed_.path.c_str ());
-        repo_.ini      = new iSK_INI (repo_.path.c_str ());
-
-        installed_.ini->parse ();
-        repo_.ini->parse      ();
+        installed_.ini = SK_CreateINI (installed_.path.c_str ());
+        repo_.ini      = SK_CreateINI (repo_.path.c_str      ());
 
         auto repo_it =
           repo_.ini->get_sections ().begin ();
@@ -115,15 +135,20 @@ protected:
         {
           // Find any section named Version.*
           if ( wcsstr (repo_it->second.name.c_str (), L"Version.") ==
-                 repo_it->second.name.c_str () ) {
+                 repo_it->second.name.c_str () )
+          {
             Branch branch;
-            branch.name = repo_it->second.name.c_str () + 8;
+
+            branch.name =
+              CharNextW (StrStrW (repo_it->second.name.c_str (), L"."));
 
             if (branch.name == L"Latest" || branch.name == L"Invalid")
               branch.name = L"Main";
 
             branch.description =
-              ((iSK_INISection &)repo_it->second).get_value (L"BranchDescription");
+              const_cast <iSK_INISection &> (
+                repo_it->second
+              ).get_value (L"BranchDescription");
 
             if (branch.description == L"Invalid")
               branch.description = L"No Description Available?!";
@@ -143,11 +168,13 @@ protected:
         if (installed_branch == L"Latest" || installed_branch == L"Invalid")
           installed_branch = L"Main";
 
-        active_branch = getBranch (installed_branch.c_str ());
+        active_branch =
+          getBranch (installed_branch.c_str ());
       }
     }
 
-    Branch* getBranch (const wchar_t* wszName) {
+    Branch* getBranch (const wchar_t* wszName)
+    {
       int  idx = 0;
       auto it  = branches.begin ();
 
@@ -162,7 +189,8 @@ protected:
       return nullptr;
     }
 
-    Branch* getCurrentBranch (void) const {
+    Branch* getCurrentBranch (void) const
+    {
       return active_branch;
     }
 
@@ -172,7 +200,8 @@ protected:
 
     bool migrateToBranch (const wchar_t* wszName)
     {
-      Branch* pBranch = getBranch (wszName);
+      Branch* pBranch =
+        getBranch (wszName);
 
       if (! pBranch)
         return false;
@@ -180,7 +209,8 @@ protected:
       if (active_branch == pBranch)
         return false;
 
-      try {
+      try
+      {
         iSK_INI* installed =
           installed_.ini;
 
@@ -215,7 +245,9 @@ protected:
           update_sec.add_key_value (L"Reminder", L"0");
 
         installed->write (installed_.path.c_str ());
-      } catch (...) {
+      }
+
+      catch (...) {
         return false;
       }
 
@@ -225,7 +257,7 @@ protected:
     std::wstring         install_package = L"";
     Branch*              active_branch   = nullptr;
     std::vector <Branch> branches;
-    uint32_t             app_id;
+    uint32_t             app_id          = 0;
 
   private:
     struct {

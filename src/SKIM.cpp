@@ -64,10 +64,41 @@ sk_product_t products [] =
   {
     L"dinput8.dll",
     L"", L"Special K", // DLL ProductName
+#ifdef _WIN64
+    L".hack//G.U. Last Recode",
+    L".hack//G.P.U.",
+    L"",
+    L"dGPU",
+#else
+    L"",
+    L"",
+    L"",
+    L"",
+#endif
+    L"8A7FSUFJ6KB2U",
+    525480,
+    SK_64_BIT,
+    false,
+    L"Currently Fixes texture aliasing problems, adds support for texture mods, "
+    L"reduces texture streaming performance issues. Will be expanded to fix a few "
+    L"of the game's shaders.",
+    0
+  },
+
+  {
+    L"dinput8.dll",
+    L"", L"Special K", // DLL ProductName
+#ifdef _WIN64
     L"NieR: Automata™",
     L"\"FAR\" (Fix Automata Res.)",
     L"",
     L"FAR/dinput8",
+#else
+    L"",
+    L"",
+    L"",
+    L"",
+#endif
     L"H6SDVFMHZVUR6",
     524220,
     SK_64_BIT,
@@ -81,10 +112,17 @@ sk_product_t products [] =
   {
     L"d3d9.dll",
     L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
+#ifdef _WIN64
     L"Tales of Berseria",
     L"Tales of Berseria \"Fix\"",
     L"",
     L"TBF",
+#else
+    L"",
+    L"",
+    L"",
+    L"",
+#endif
     L"ALPEVA3UX74LL",
     429660,
     SK_64_BIT,
@@ -98,10 +136,17 @@ sk_product_t products [] =
   {
     L"d3d9.dll",
     L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
+#ifdef _WIN64
     L"Tales of Berseria (Demo)",
     L"Tales of Berseria (Demo) \"Fix\"",
     L"",
     L"TBF",
+#else
+    L"",
+    L"",
+    L"",
+    L"",
+#endif
     L"ALPEVA3UX74LL",
     550350,
     SK_64_BIT,
@@ -156,6 +201,7 @@ sk_product_t products [] =
     L"",
     L"",
     L"",
+    L"",
 #endif
     L"", // N/A
     377160,
@@ -196,6 +242,7 @@ sk_product_t products [] =
     L"ds3t.exe",
     L"SoulsUnsqueezed",
 #else
+    L"",
     L"",
     L"",
     L"",
@@ -364,21 +411,23 @@ SKIM_FixSlashes (wchar_t* wszInOut)
 { 
   std::wstring wstr (wszInOut);
 
-  for ( auto&& it : wstr )
+  for ( auto& it : wstr )
     if (it == L'/')
       it = L'\\';
 
   wcscpy (wszInOut, wstr.c_str ());
 }
 
-std::vector <sk_product_t*>
+std::vector <sk_product_t *>
 SKIM_GetInstallableProducts (void)
 {
-  std::vector <sk_product_t*> prods;
+  std::vector <sk_product_t *> prods;
 
   for (int i = 0; i < sizeof (products) / sizeof (sk_product_t); i++)
   {
-    int state = SKIM_DetermineInstallState (products [i]);
+    int state =
+      SKIM_DetermineInstallState (products [i]);
+
     if (state != -1)
     {
       std::wstring path (SKIM_FindInstallPath (products [i].uiSteamAppID));
@@ -466,11 +515,8 @@ SKIM_FindInstallPath (uint32_t appid)
 
         dwSize = GetFileSize (hLibFolders, &dwSizeHigh);
 
-        std::unique_ptr <uint8_t> data_ (
-          new uint8_t [dwSize] { }
-        );
-
-        void* data = data_.get ();
+        void* data =
+          new uint8_t [dwSize] { };
 
         if (data == nullptr)
         {
@@ -511,6 +557,8 @@ SKIM_FindInstallPath (uint32_t appid)
             }
           }
         }
+
+        delete [] data;
       }
     }
 
@@ -552,11 +600,8 @@ SKIM_FindInstallPath (uint32_t appid)
         dwSize =
           GetFileSize (hManifest, &dwSizeHigh);
 
-        std::unique_ptr <char> manifest_data (
-          new char [dwSize + 1] { }
-        );
-
-        char* szManifestData = manifest_data.get ();
+        char* szManifestData =
+          new char [dwSize + 1] { };
 
         if (szManifestData == nullptr)
         {
@@ -597,12 +642,16 @@ SKIM_FindInstallPath (uint32_t appid)
 
           if (SKIM_Util_IsDirectory (wszGamePath))
           {
+            delete [] szManifestData;
+
             return wszGamePath;
           }
 
           else
             invalid = true;
         }
+
+        delete [] szManifestData;
       }
     }
   }
@@ -632,15 +681,12 @@ SKIM_FindInstallPath (uint32_t appid)
     dwSize =
       GetFileSize (hManifest, &dwSizeHigh);
 
-    std::unique_ptr <char> manifest_data (
-      new char [dwSize + 1] { }
-    );
+    char* szManifestData =
+      new char [dwSize + 1] { };
 
-    char* szManifestData = manifest_data.get ();
 
     if (szManifestData == nullptr)
     {
-      CloseHandle (hManifest);
       return nullptr;
     }
 
@@ -652,6 +698,7 @@ SKIM_FindInstallPath (uint32_t appid)
 
     if (! dwRead)
     {
+      delete [] szManifestData;
       return nullptr;
     }
 
@@ -681,11 +728,14 @@ SKIM_FindInstallPath (uint32_t appid)
 
     if (SKIM_Util_IsDirectory (wszGamePath))
     {
+      delete [] szManifestData;
       return wszGamePath;
     }
 
     else
       invalid = true;
+
+    delete [] szManifestData;
   }
 
   if (invalid)
@@ -799,7 +849,7 @@ SKIM_Util_IsProcessRunning (const wchar_t* wszProcName)
   }
 
   do {
-    if (! lstrcmpiW (wszProcName, pe32.szExeFile)) {
+    if (! _wcsicmp (wszProcName, pe32.szExeFile)) {
       CloseHandle (hProcSnap);
       return true;
     }
@@ -869,8 +919,12 @@ SKIM_Util_MoveFileNoFail ( const wchar_t* wszOld, const wchar_t* wszNew )
 bool
 SKIM_Depends_TestKB2533623 (SK_ARCHITECTURE arch)
 {
+  UNREFERENCED_PARAMETER (arch);
+
   return GetProcAddress (GetModuleHandle (L"kernel32.dll"), "AddDllDirectory") != nullptr;
 }
+
+#include <Msi.h>
 
 bool
 SKIM_Depends_TestVisualCRuntime (SK_ARCHITECTURE arch)
@@ -1099,8 +1153,8 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
 
   if (! SKIM_Depends_TestKB2533623 (SK_BOTH_BIT) )
   {
-    int               nButtonPressed = 0;
-    TASKDIALOGCONFIG  config         = {0};
+    int               nButtonPressed =   0;
+    TASKDIALOGCONFIG  config         = { };
 
     config.cbSize             = sizeof (config);
     config.hInstance          = g_hInstance;
@@ -2001,7 +2055,8 @@ SKIM_SummarizeRenderAPI (sk_product_t& product)
   else if (! _wcsicmp (product.wszWrapper, L"SpecialK64.dll"))
 #endif
     ret += L"GL/D3D9/11/12/Vulkan";
-  else if ( !_wcsicmp (product.wszRepoName, L"FAR/dinput8") )
+  else if ( (! _wcsicmp (product.wszRepoName, L"FAR/dinput8")) ||
+            (! _wcsicmp (product.wszRepoName, L"dGPU")) )
       ret += L"Direct3D 11";
 
   if (product.architecture == SK_32_BIT)
@@ -2198,13 +2253,10 @@ SKIM_OnProductSelect (void)
       SKIM_SummarizeRenderAPI (products [sel]).c_str ()
   );
 
-  CHARFORMAT2W cf2;
-  ZeroMemory (&cf2, sizeof CHARFORMAT2W);
-
-  cf2.cbSize = sizeof CHARFORMAT2W;
-
-  cf2.crTextColor = RGB (0, 0, 0);
-  cf2.dwMask      = CFM_COLOR;
+  CHARFORMAT2W cf2             = {                 };
+               cf2.cbSize      = sizeof CHARFORMAT2W;
+               cf2.crTextColor = RGB (0, 0, 0);
+               cf2.dwMask      = CFM_COLOR;
 
   SendMessage (hWndRichProductDescrip, EM_SETSEL,        0,             -1);
   SendMessage (hWndRichProductDescrip, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf2);
@@ -2348,11 +2400,10 @@ Main_DlgProc (
       static bool init = false;
 
       if (! init) {
-        INITCOMMONCONTROLSEX icex;
-        ZeroMemory (&icex, sizeof INITCOMMONCONTROLSEX);
-
-        icex.dwSize = sizeof INITCOMMONCONTROLSEX;
-        icex.dwICC  = ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
+        INITCOMMONCONTROLSEX icex        = {                         };
+                             icex.dwSize = sizeof INITCOMMONCONTROLSEX;
+                             icex.dwICC  = ICC_STANDARD_CLASSES |
+                                           ICC_BAR_CLASSES;
 
         InitCommonControlsEx (&icex);
 
@@ -2666,7 +2717,7 @@ Main_DlgProc (
     {
       SKIM_StopInjectingAndExit (hWndDlg, false);
 
-      return 0;
+      //return 0;
     }
 
     case SKIM_START_INJECTION:
@@ -3080,6 +3131,7 @@ SKIM_InstallGlobalInjector (LPVOID user)
       L"Special K",
       L"Special K",
       L"Special K (Global Injector)",
+      L"",
       L"SpecialK/0.8.x",
       L"8A7FSUFJ6KB2U",
       0,
@@ -3220,26 +3272,6 @@ wWinMain ( _In_     HINSTANCE hInstance,
            _In_     LPWSTR    lpCmdLine,
            _In_     int       nCmdShow )
 {
-  timeGetTime =
-    (timeGetTime_pfn)GetProcAddress ( GetModuleHandle (L"kernel32.dll"),
-                                        "timeGetTime" );
-
-  VerQueryValueW =
-    (VerQueryValueW_pfn)GetProcAddress ( LoadLibrary (L"Version.dll"),
-                                           "VerQueryValueW" );
-
-  GetFileVersionInfoExW =
-    (GetFileVersionInfoExW_pfn)GetProcAddress ( LoadLibrary (L"Version.dll"),
-                                                  "GetFileVersionInfoExW" );
-
-  MsiQueryProductStateW =
-    (MsiQueryProductStateW_pfn)GetProcAddress ( LoadLibrary (L"msi.dll"),
-                                                  "MsiQueryProductStateW" );
-
-  MsiEnumRelatedProductsW =
-    (MsiEnumRelatedProductsW_pfn)GetProcAddress ( LoadLibrary (L"msi.dll"),
-                                                    "MsiEnumRelatedProductsW" );
-
   CoInitializeEx (nullptr, COINIT_MULTITHREADED);
 
   g_hInstance    =                   hInstance;
@@ -3260,7 +3292,8 @@ wWinMain ( _In_     HINSTANCE hInstance,
   SKIM_Util_DeleteTemporaryFiles (startup_dir,   L"*.tmp");
   SKIM_Util_DeleteTemporaryFiles (wszVersionDir, L"*.old");
 
-  std::unique_ptr <wchar_t> wszArgs (_wcsdup (PathGetArgsW (GetCommandLineW ())));
+  wchar_t* wszArgs =
+    _wcsdup (PathGetArgsW (GetCommandLineW ()));
 
                                  WNDCLASS wc = { };
   GetClassInfo  (g_hInstance, L"#32770", &wc);
@@ -3276,23 +3309,26 @@ wWinMain ( _In_     HINSTANCE hInstance,
   bool __SKIM_Inject   = false,
        __SKIM_Uninject = false;
 
-  if (wcslen (wszArgs.get ()))
+  if (wcslen (wszArgs))
   {
-         if (StrStrIW (wszArgs.get (), L"+Inject")) __SKIM_Inject   = true;
-    else if (StrStrIW (wszArgs.get (), L"-Inject")) __SKIM_Uninject = true;
+         if (StrStrIW (wszArgs, L"+Inject")) __SKIM_Inject   = true;
+    else if (StrStrIW (wszArgs, L"-Inject")) __SKIM_Uninject = true;
 
     if (__SKIM_Inject || __SKIM_Uninject)
       injector_action = true;
   }
 
   // If we're not starting / stopping injection, then reuse an existing instance.
-  else if ((! wcslen (wszArgs.get ())) && IsWindow (hWndExisting))
+  else if ((! wcslen (wszArgs)) && IsWindow (hWndExisting))
   {
     SetForegroundWindow (hWndExisting);
     BringWindowToTop    (hWndExisting);
     SetActiveWindow     (hWndExisting);
 
     SendMessage (hWndExisting, WM_SIZE, SIZE_RESTORED, 0);
+
+    if (wszArgs != nullptr)
+      free (wszArgs);
 
     return 0;
   }
@@ -3349,7 +3385,7 @@ wWinMain ( _In_     HINSTANCE hInstance,
   }
 
 
-  wchar_t wszTitle [128] = { };
+  wchar_t    wszTitle [128] = { };
   lstrcatW ( wszTitle,
                 L"Special K Install Manager - (v " );
   lstrcatW ( wszTitle,
@@ -3361,9 +3397,9 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
 
   // We can install PlugIns by passing their AppID through the cmdline
-  if ((! injector_action) && wcslen (wszArgs.get ()))
+  if ((! injector_action) && wcslen (wszArgs))
   {
-    int32_t appid = _wtoi (wszArgs.get ());
+    int32_t appid = _wtoi (wszArgs);
 
     if (appid > 0)
     {
@@ -3393,8 +3429,8 @@ wWinMain ( _In_     HINSTANCE hInstance,
 
     else
     {
-      bool zero = StrStrIW (wszArgs.get (), L"0")  != nullptr ? wcslen (StrStrIW (wszArgs.get (), L"0"))  == 1 : false;
-      bool neg1 = StrStrIW (wszArgs.get (), L"-1") != nullptr ? wcslen (StrStrIW (wszArgs.get (), L"-1")) == 2 : false;
+      bool zero = StrStrIW (wszArgs, L"0")  != nullptr ? wcslen (StrStrIW (wszArgs, L"0"))  == 1 : false;
+      bool neg1 = StrStrIW (wszArgs, L"-1") != nullptr ? wcslen (StrStrIW (wszArgs, L"-1")) == 2 : false;
 
       // Install Global Injector
       if (zero && appid == 0)
@@ -3460,6 +3496,8 @@ wWinMain ( _In_     HINSTANCE hInstance,
     CloseHandle (pinfo.hThread);
     CloseHandle (pinfo.hProcess);
   }
+
+  free (wszArgs);
 
   // Prevent DLL shutdown, we didn't load the DLLs for their regular intended purpose
   SKIM_Exit ();

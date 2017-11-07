@@ -72,8 +72,18 @@ SKIM_GlobalInject_Free (void)
 bool
 SKIM_GlobalInject_Start (void)
 {
+  CoInitializeEx (0, COINIT_MULTITHREADED);
+
   if (SKIM_GlobalInject_Load ())
   {
+    wchar_t wszInjectionCacheLock [MAX_PATH + 2] = { };
+
+                                              uint32_t dwStrLen = MAX_PATH;
+    SKIM_Util_GetDocumentsDir (wszInjectionCacheLock, &dwStrLen);
+
+    PathAppendW (wszInjectionCacheLock, L"My Mods\\SpecialK\\Global\\injection.ini.lock");
+    DeleteFileW (wszInjectionCacheLock);
+
     if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
     {
       if (GetFileAttributes (L"SpecialK32.pid") == INVALID_FILE_ATTRIBUTES)
@@ -345,6 +355,8 @@ SKIM_SetStartMenuLink (bool enable, wchar_t* wszExecutable)
 bool
 SKIM_GlobalInject_Stop (bool confirm)
 {
+  UNREFERENCED_PARAMETER (confirm);
+
   if (GetFileAttributes (L"SpecialK32.dll") != INVALID_FILE_ATTRIBUTES)
   {
     if (GetFileAttributes (L"SpecialK32.pid") != INVALID_FILE_ATTRIBUTES)
@@ -441,7 +453,7 @@ SKIM_SummarizeInjectedPIDs (std::wstring& out)
   {
     SKX_GetInjectedPIDs (dwPIDs, count + 1);
 
-    for (int i = 0; i < count; i++)
+    for (size_t i = 0; i < count; i++)
     {
       CHandle hProc (
         OpenProcess ( PROCESS_QUERY_INFORMATION,
@@ -491,8 +503,9 @@ SKIM_GetInjectorState (void)
   
   if (hMod != NULL)
   {
-    SKX_IsHookingCBT_pfn SKX_IsHookingCBT =
-      (SKX_IsHookingCBT_pfn)GetProcAddress   (hMod, "SKX_IsHookingCBT");
+    if (! SKX_IsHookingCBT)
+      SKX_IsHookingCBT =
+        (SKX_IsHookingCBT_pfn)GetProcAddress   (hMod, "SKX_IsHookingCBT");
 
     int ret = 0;
 

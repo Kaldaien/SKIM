@@ -2165,7 +2165,8 @@ DLC_DlgProc (
       total_downloaded_bytes += (uint32_t)wParam;
       file_downloaded_bytes  += (uint32_t)wParam;
 
-      if (timeGetTime () - last_update > 125) {
+      if (timeGetTime () - last_update > 125)
+      {
         wchar_t wszTotalSize [64] = { L'\0' };
 
         _swprintf ( wszTotalSize,

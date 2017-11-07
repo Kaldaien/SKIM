@@ -48,8 +48,8 @@ static HBITMAP hIconUninstall     = 0;
 static HBITMAP hIconUpdate        = 0;
 static HBITMAP hIconUtility       = 0;
 
-auto ApplyBitmap = [](HBITMAP hBitmap, UINT_PTR idx, HMENU hMenu) ->
-void
+auto ApplyBitmap =
+[ ](HBITMAP hBitmap, UINT_PTR idx, HMENU hMenu)
 {
   MENUITEMINFOW minfo = { };
 
@@ -183,7 +183,8 @@ SKIM_Tray_RestoreFrom (HWND hWndDlg)
 void
 SKIM_Tray_SetupProductMenu (sk_product_t* prod)
 {
-  int idx = SKIM_GetProductIdx (prod);
+  int idx =
+    SKIM_GetProductIdx (prod);
 
   if (prod->menus.hProductMenu != nullptr) DestroyMenu (prod->menus.hProductMenu);
   if (prod->menus.hUtilMenu    != nullptr) DestroyMenu (prod->menus.hUtilMenu);
@@ -207,7 +208,8 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
 
   if (prod->install_state != 0)
   {
-    int count = SKIM_CountProductBranches (prod);
+    int count =
+      SKIM_CountProductBranches (prod);
 
     if (count > 1)
     {
@@ -227,9 +229,8 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
 
         if (current == pBranch->name)
         {
-          MENUITEMINFOW minfo_branch = { };
-
-          minfo_branch.cbSize = sizeof MENUITEMINFOW;
+          MENUITEMINFOW minfo_branch        = {                  };
+                        minfo_branch.cbSize = sizeof MENUITEMINFOW;
 
           GetMenuItemInfoW (prod->menus.hBranchMenu, 128 * (idx+1) + 96 + i, FALSE, &minfo_branch);
 
@@ -240,8 +241,7 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
         }
       }
 
-      wchar_t wszBranchSelect [MAX_PATH] = { };
-
+      wchar_t   wszBranchSelect [MAX_PATH] = { };
       swprintf (wszBranchSelect, L"  Branch: %ws", current.c_str ());
 
       AppendMenu (prod->menus.hProductMenu, MF_POPUP | MF_STRING, (INT_PTR)prod->menus.hBranchMenu, wszBranchSelect);
@@ -330,8 +330,8 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
 void
 SKIM_Tray_UpdateProduct (sk_product_t* prod)
 {
-  MENUITEMINFOW minfo_product = { };
-  minfo_product.cbSize = sizeof MENUITEMINFOW;
+  MENUITEMINFOW minfo_product        = { };
+                minfo_product.cbSize = sizeof MENUITEMINFOW;
 
   GetMenuItemInfoW (hTrayMenu, (UINT)(UINT_PTR)hTrayProductSelectMenu, FALSE, &minfo_product);
 
@@ -362,21 +362,25 @@ SKIM_Tray_Init (HWND hWndDlg)
     hTrayMenu              = CreatePopupMenu ();
     hTrayProductSelectMenu = CreatePopupMenu ();
 
-    MENUINFO minfo = { };
-
-    minfo.cbSize = sizeof MENUINFO;
-    minfo.fMask  = MIM_STYLE;
+    MENUINFO minfo        = {             };
+             minfo.cbSize = sizeof MENUINFO;
+             minfo.fMask  = MIM_STYLE;
 
     GetMenuInfo (hTrayMenu, &minfo);
 
     minfo.dwStyle |= MNS_NOTIFYBYPOS;
     minfo.fMask    = MIM_STYLE;
 
-    std::vector <sk_product_t*> prods = SKIM_GetInstallableProducts ();
-    for ( auto it : prods )
+    std::vector <sk_product_t *> prods =
+      SKIM_GetInstallableProducts ();
+
+    for ( auto& it : prods )
     {
-      int idx = SKIM_GetProductIdx (it);
+      int idx =
+        SKIM_GetProductIdx (it);
+
       SKIM_Tray_SetupProductMenu (it);
+
       AppendMenu  (hTrayProductSelectMenu, MF_BYCOMMAND | MF_STRING | MF_MOUSESELECT | MF_POPUP, 128 * ++idx, it->wszProjectName);
     }
 

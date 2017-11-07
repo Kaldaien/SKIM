@@ -9,6 +9,9 @@
 
 #include <queue>
 
+#include <MMSystem.h>
+#pragma comment (lib, "winmm.lib")
+
 bool
 __stdcall
 SKIM_FetchDLCManagerDLL (  sk_product_t&  product,
@@ -637,7 +640,8 @@ Fetch_DlgProc (
       total_fetched_bytes += (uint32_t)wParam;
       file_fetched_bytes  += (uint32_t)wParam;
 
-      if (timeGetTime () - last_update > 125) {
+      if (timeGetTime () - last_update > 125)
+      {
         wchar_t wszTotalSize [64] = { L'\0' };
 
         _swprintf ( wszTotalSize,
