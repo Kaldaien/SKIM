@@ -63,7 +63,7 @@ sk_product_t products [] =
 
   {
     L"dinput8.dll",
-    L"", L"Special K", // DLL ProductName
+    L"d3d11.dll", L"ReShade", // DLL ProductName
 #ifdef _WIN64
     L".hack//G.U. Last Recode",
     L".hack//G.P.U.",

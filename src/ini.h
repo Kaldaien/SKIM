@@ -26,7 +26,6 @@
 #include <vector>
 
 #include <Unknwn.h>
-//#include <Unknwnbase.h>
 
 // {B526D074-2F4D-4BAE-B6EC-11CB3779B199}
 static const GUID IID_SK_INISection = 
@@ -35,8 +34,7 @@ static const GUID IID_SK_INISection =
 interface iSK_INISection : public IUnknown
 {
 public:
-  iSK_INISection (void) {
-  }
+  iSK_INISection (void) = default;
 
   iSK_INISection (const wchar_t* section_name) {
     name = section_name;
@@ -56,7 +54,7 @@ public:
   //protected:
   //private:
   std::wstring                                    name;
-  std::unordered_map <std::wstring, std::wstring> pairs;
+  std::unordered_map <std::wstring, std::wstring> keys;
   std::vector        <std::wstring>               ordered_keys;
 
   ULONG                                           refs = 0;
@@ -68,7 +66,8 @@ static const GUID IID_SK_INI =
 
 interface iSK_INI : public IUnknown
 {
-  typedef const std::unordered_map <std::wstring, iSK_INISection> _TSectionMap;
+  using _TSectionMap =
+    const std::unordered_map <std::wstring, iSK_INISection>;
 
    iSK_INI (const wchar_t* filename);
   ~iSK_INI (void);
@@ -91,6 +90,7 @@ interface iSK_INI : public IUnknown
                                                   wchar_t const* const _Format,
                                                                        ... );
   STDMETHOD_ (const wchar_t*,  get_filename)    (THIS) const;
+  STDMETHOD_ (bool,            import_file)     (const wchar_t* fname);
 
 protected:
 private:
@@ -99,8 +99,9 @@ private:
   wchar_t*  wszName = nullptr;
   wchar_t*  wszData = nullptr;
 
-  std::unordered_map <std::wstring, iSK_INISection>
-            sections;
+  std::unordered_map <
+    std::wstring, iSK_INISection
+  >         sections;
 
   // Preserve insertion order so that we write the INI file in the
   //   same order we read it. Otherwise things get jumbled around

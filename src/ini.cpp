@@ -32,7 +32,6 @@
 
 #include "ini.h"
 
-
 std::wstring
 ErrorMessage (errno_t        err,
               const char*    args,
@@ -125,28 +124,35 @@ SK_CreateDirectories ( const wchar_t* wszPath )
 
 iSK_INI::iSK_INI (const wchar_t* filename)
 {
+  encoding_ = INI_UTF16LE;
+
   if (wcsstr (filename, L"Version"))
     SK_CreateDirectories (filename);
 
-  AddRef ();
+  sections.clear ();
 
-  // We skip a few bytes (Unicode BOM) in crertain cirumstances, so this is the
+  // We skip a few bytes (Unicode BOM) in certain circumstances, so this is the
   //   actual pointer we need to free...
-  wchar_t* alloc  = nullptr;
-          wszName = new wchar_t [wcslen (filename) + 4] { };
-  wcscpy (wszName,                       filename);
+  wchar_t* alloc = nullptr;
 
-  TRY_FILE_IO (_wfsopen (filename, L"rb", _SH_DENYNO), filename, fINI);
+  wszName =
+    new wchar_t [wcslen (filename) + 2] { };
 
-  if (fINI != 0)
+  wcscpy (wszName, filename);
+
+  TRY_FILE_IO (_wfsopen (filename, L"rbS", _SH_DENYNO), filename, fINI);
+
+  if (fINI != nullptr)
   {
-    long size =
+    auto size =
       static_cast <long> (SK_GetFileSize (filename));
 
     wszData = new wchar_t [size + 2] { };
     alloc   = wszData;
 
-    fread (wszData, size, 1, fINI);
+    fread  (wszData, size, 1, fINI);
+    fflush (fINI);
+    fclose (fINI);
 
     // First, consider Unicode
     // UTF16-LE  (All is well in the world)
@@ -164,13 +170,12 @@ iSK_INI::iSK_INI (const wchar_t* filename)
       //              L"file ('%s'), attempting to recover...",
       //                wszName );
 
-      wchar_t* wszSwapMe =
-                 wszData;
+      wchar_t* wszSwapMe = wszData;
 
       for (int i = 0; i < size; i += 2)
       {
         *wszSwapMe++ =
-          _byteswap_ushort (*wszSwapMe);
+           _byteswap_ushort (*wszSwapMe);
       }
 
       ++wszData; // Skip the BOM
@@ -183,155 +188,108 @@ iSK_INI::iSK_INI (const wchar_t* filename)
     else
     {
       // Skip the silly UTF8 BOM if it is present
-      bool utf8 = ((unsigned char *)wszData) [0] == 0xEF &&
-                  ((unsigned char *)wszData) [1] == 0xBB &&
-                  ((unsigned char *)wszData) [2] == 0xBF;
+      bool utf8 = (reinterpret_cast <unsigned char *> (wszData)) [0] == 0xEF &&
+                  (reinterpret_cast <unsigned char *> (wszData)) [1] == 0xBB &&
+                  (reinterpret_cast <unsigned char *> (wszData)) [2] == 0xBF;
 
-      const uintptr_t offset    =
+      const uintptr_t offset =
         utf8 ? 3 : 0;
 
-
       const int       real_size =
-        size - (int)offset;
+        size - static_cast <int> (offset);
 
-      char* start_addr =
-        ((char *)wszData) + offset;
+      char*           start_addr =
+      (reinterpret_cast <char *> (wszData)) + offset;
 
-      char* string     =
-        new char [real_size + 1] { };
+      auto*           string =
+        new char [real_size];
 
+      memcpy (string, start_addr, real_size);
 
-      if (string != nullptr)
+      delete [] wszData;
+
+      int converted_size =
+        MultiByteToWideChar ( CP_UTF8, 0, string, real_size, nullptr, 0 );
+
+      if (! converted_size)
       {
-        memcpy (string, start_addr, real_size);
-
-        if (alloc != nullptr)
-        {
-          delete [] alloc;
-                    alloc = nullptr;
-
-          wszData = nullptr;        
-        }
-
-
-        int converted_size =
-          MultiByteToWideChar ( CP_UTF8, 0, string, real_size, nullptr, 0 );
-
-
-        if (! converted_size)
-        {
-          //dll_log.Log ( L"[INI Parser] Could not convert UTF-8 / ANSI Encoded "
-          //              L".ini file ('%s') to UTF-16, aborting!",
-          //                wszName );
-
-          fclose (fINI);
-
-          if (string != nullptr)
-          {
-            delete [] string;
-                      string = nullptr;
-          }
-
-          return;
-        }
-
-
-        wszData =
-          new wchar_t [converted_size + 1] { };
-
-        MultiByteToWideChar ( CP_UTF8, 0, string, real_size, wszData, converted_size );
-
-        //dll_log.Log ( L"[INI Parser] Converted UTF-8 INI File: '%s'",
-                        //wszName );
+        //dll_log.Log ( L"[INI Parser] Could not convert UTF-8 / ANSI Encoded "
+        //              L".ini file ('%s') to UTF-16, aborting!",
+        //                wszName );
+        wszData = nullptr;
 
         delete [] string;
-                  string = nullptr;
+
+        return;
       }
 
+      wszData =
+        new wchar_t [converted_size + 1] { };
+
+      MultiByteToWideChar ( CP_UTF8, 0, string, real_size, wszData, converted_size );
+
+      //dll_log.Log ( L"[INI Parser] Converted UTF-8 INI File: '%s'",
+                      //wszName );
+
+      delete [] string;
+
       // No Byte-Order Marker
-      alloc     = wszData;
+      alloc = wszData;
+
       encoding_ = INI_UTF8;
     }
 
+    parse ();
 
-    if (alloc != nullptr)
-    {
-      parse ();
-
-      delete [] alloc;
-                alloc = nullptr;
-    }
-
-
-    wszData = nullptr;
-
-
-    fflush (fINI);
-    fclose (fINI);
+    // TODO:  Should we keep data in unparsed format?
+//    delete [] alloc;
+//    wszData = nullptr;
+    // Why not? It would make re-parsing safer
   }
-
 
   else
   {
-    if (alloc != nullptr)
-    {
-      delete [] alloc;
-                alloc = nullptr;
-    }
-
     wszData = nullptr;
   }
 }
 
 iSK_INI::~iSK_INI (void)
 {
-  ////if (wszName != nullptr)
-  ////{
-  ////  delete [] wszName;
-  ////            wszName = nullptr;
-  ////}
-  ////
-  ////if (wszData != nullptr)
-  ////{
-  ////  delete [] wszData;
-  ////            wszData = nullptr;
-  ////}
+  if (Release () == 0)
+  {
+    if (wszName != nullptr)
+    {
+      delete [] wszName;
+      wszName = nullptr;
+    }
 
-  Release ();
+    if (wszData != nullptr)
+    {
+      delete[] wszData;
+      wszData = nullptr;
+    }
+  }
 }
 
 auto wcrlen =
- [ ](wchar_t *_start, wchar_t *_end) ->
-  size_t
-  {
-    size_t   _len = 0;
-
-    wchar_t* _it  = _start;
-    while (_it < _end)
+  [](wchar_t *_start, wchar_t *_end) ->
+    size_t
     {
-      _it = CharNextW (_it);
-      ++_len;
-    }
+      size_t _len = 0;
 
-    return _len;
-  };
+      wchar_t* _it = _start;
+      while   (_it < _end)
+      {
+          _it = CharNextW (_it);
+        ++_len;
+      }
+
+      return _len;
+    };
 
 iSK_INISection
 Process_Section (wchar_t* name, wchar_t* start, wchar_t* end)
 {
-  MEMORY_BASIC_INFORMATION minfo = { };
-  VirtualQuery (end + 1, &minfo, sizeof minfo);
-
-  if ( (! (minfo.Type    & MEM_IMAGE))  ||
-       (! (minfo.State   & MEM_COMMIT)) ||
-           minfo.Protect & PAGE_NOACCESS )
-  {
-    // Safety-net for INI files that do not have our cannonical blank-line
-    //   at the end of the final section
-    end = CharPrevW (start, end);
-  }
-
-
   iSK_INISection section (name);
 
   const wchar_t* penultimate = CharPrevW (start, end);
@@ -341,11 +299,12 @@ Process_Section (wchar_t* name, wchar_t* start, wchar_t* end)
   {
     if (k < penultimate && *k == L'=')
     {
-      wchar_t* key_str = new wchar_t [k - key + 1] { };
+      auto*    key_str = new wchar_t [k - key + 1] { };
       size_t   key_len =          wcrlen (key, k);
       wcsncpy (key_str,                   key, key_len);
 
-      wchar_t* value = CharNextW (k);
+      wchar_t* value =
+        CharNextW (k);
 
       for (wchar_t* l = value; l <= end; l = CharNextW (l))
       {
@@ -360,7 +319,7 @@ Process_Section (wchar_t* name, wchar_t* start, wchar_t* end)
             k = end;
           }
 
-          wchar_t* val_str = new wchar_t [l - value + 1] { };
+          auto*    val_str = new wchar_t [l - value + 1] { };
           size_t   val_len = wcrlen          (value, l);
           wcsncpy (val_str,                   value, val_len);
 
@@ -389,11 +348,12 @@ Import_Section (iSK_INISection& section, wchar_t* start, wchar_t* end)
   {
     if (k < penultimate && *k == L'=')
     {
-      wchar_t* key_str = new wchar_t [k - key + 1] { };
+      auto*    key_str = new wchar_t [k - key + 1] { };
       size_t   key_len =          wcrlen (key, k);
       wcsncpy (key_str,                   key, key_len);
 
-      wchar_t* value = CharNextW (k);
+      wchar_t* value =
+        CharNextW (k);
 
       for (wchar_t* l = value; l <= end; l = CharNextW (l))
       {
@@ -402,9 +362,15 @@ Import_Section (iSK_INISection& section, wchar_t* start, wchar_t* end)
           key = CharNextW (l);
             k = key;
 
-          wchar_t* val_str = new wchar_t [l - value + 1] { };
+          if (l == end)
+          {
+            l = CharNextW (l);
+            k = end;
+          }
+
+          auto*    val_str = new wchar_t [l - value + 1] { };
           size_t   val_len = wcrlen          (value, l);
-          wcsncat (val_str,                   value, val_len);
+          wcsncpy (val_str,                   value, val_len);
 
           // Prefer to change an existing value
           if (section.contains_key (key_str))
@@ -416,14 +382,13 @@ Import_Section (iSK_INISection& section, wchar_t* start, wchar_t* end)
           }
 
           // But create a new one if it doesn't already exist
-          else
-          {
+          else {
             section.add_key_value (key_str, val_str);
           }
 
           delete [] val_str;
 
-          l = end;
+          l = end + 1;
         }
       }
 
@@ -440,11 +405,14 @@ iSK_INI::parse (void)
 {
   if (wszData != nullptr)
   {
-    int len = lstrlenW (wszData);
+    int len =
+      lstrlenW (wszData);
 
     // We don't want CrLf, just Lf
-    bool     strip_cr = false;
-    wchar_t* wszStrip = &wszData [0];
+    bool strip_cr = false;
+
+    wchar_t* wszStrip =
+      &wszData [0];
 
     // Find if the file has any Cr's
     for (int i = 0; i < len; i++)
@@ -458,22 +426,20 @@ iSK_INI::parse (void)
       wszStrip = CharNextW (wszStrip);
     }
 
-    wchar_t* wszDataEnd = &wszData [0];
+    wchar_t* wszDataEnd =
+      &wszData [0];
 
     if (strip_cr)
     {
-      wchar_t* wszDataNext = &wszData [0];
-
-      // Remove all Cr's and then re-NUL terminate the truncated file
-      int out = 0;
+      wchar_t* wszDataNext =
+        &wszData [0];
 
       for (int i = 0; i < len; i++)
       {
         if (*wszDataNext != L'\r')
         {
-           ++out;
           *wszDataEnd = *wszDataNext;
-           wszDataEnd =  CharNextW (wszDataEnd);
+           wszDataEnd = CharNextW (wszDataEnd);
         }
 
         wszDataNext = CharNextW (wszDataNext);
@@ -484,9 +450,11 @@ iSK_INI::parse (void)
 
       memset ( wszDataEnd,
                  0x00,
-                   (uintptr_t)wszNext - (uintptr_t)wszDataEnd );
+                   reinterpret_cast <uintptr_t> (wszNext) -
+                   reinterpret_cast <uintptr_t> (wszDataEnd) );
 
-      len = lstrlenW (wszData);
+      len =
+        lstrlenW (wszData);
     }
 
     else
@@ -500,10 +468,9 @@ iSK_INI::parse (void)
     wchar_t* wszSecondToLast =
       CharPrevW (wszData, wszDataEnd);
 
-    wchar_t* begin = nullptr;
-    wchar_t* end   = nullptr;
-
-    wchar_t* wszDataCur = &wszData [0];
+    wchar_t* begin           = nullptr;
+    wchar_t* end             = nullptr;
+    wchar_t* wszDataCur      = &wszData [0];
 
     for (wchar_t* i = wszDataCur; i < wszDataEnd && i != nullptr; i = CharNextW (i))
     {
@@ -517,16 +484,14 @@ iSK_INI::parse (void)
 
       if (begin != nullptr && end != nullptr && begin < end)
       {
-        wchar_t* sec_name = new wchar_t [end - begin + 1] { };
-        size_t   sec_len  = wcrlen      (begin, end);
-
-        wcsncpy (sec_name,               begin, sec_len);
+        auto*    sec_name = new wchar_t    [end - begin + 2] { };
+        size_t   sec_len  = wcrlen  (begin, end);
+        wcsncpy (sec_name,           begin, sec_len);
 
         wchar_t* start  = CharNextW (CharNextW (end));
         wchar_t* finish = start;
 
-        bool     eof    = false;
-
+        bool eof = false;
         for (wchar_t* j = start; j <= wszDataEnd; j = CharNextW (j))
         {
           if (j == wszDataEnd)
@@ -548,13 +513,11 @@ iSK_INI::parse (void)
         iSK_INISection section =
           Process_Section (sec_name, start, finish);
 
-        sections.insert (
-          std::pair <std::wstring, iSK_INISection> (
-            sec_name, section
-          )
+        sections.emplace (
+          std::make_pair (sec_name, section)
         );
 
-        ordered_sections.push_back (sec_name);
+        ordered_sections.emplace_back (sec_name);
 
         delete [] sec_name;
 
@@ -581,8 +544,10 @@ iSK_INI::import (const wchar_t* import_data)
     int len = lstrlenW (wszImport);
 
     // We don't want CrLf, just Lf
-    bool     strip_cr = false;
-    wchar_t* wszStrip = &wszImport [0];
+    bool strip_cr = false;
+
+    wchar_t* wszStrip =
+      &wszImport [0];
 
     // Find if the file has any Cr's
     for (int i = 0; i < len; i++)
@@ -596,25 +561,23 @@ iSK_INI::import (const wchar_t* import_data)
       wszStrip = CharNextW (wszStrip);
     }
 
-    wchar_t* wszImportEnd = &wszImport [0];
+    wchar_t* wszImportEnd =
+      &wszImport [0];
 
     if (strip_cr)
     {
-      wchar_t* wszImportNext = wszImportEnd;
-
-      // Remove all Cr's and then re-NUL terminate the truncated file
-      int out = 0;
+      wchar_t* wszImportNext =
+        &wszImport [0];
 
       for (int i = 0; i < len; i++)
       {
         if (*wszImportNext != L'\r')
         {
-           ++out;
           *wszImportEnd = *wszImportNext;
            wszImportEnd = CharNextW (wszImportEnd);
         }
 
-        wszImportNext = CharNextW (wszImportNext);
+        wszImportNext   = CharNextW (wszImportNext);
       }
 
       const wchar_t* wszNext =
@@ -622,9 +585,11 @@ iSK_INI::import (const wchar_t* import_data)
 
       memset ( wszImportEnd,
                  0x00,
-                   (uintptr_t)wszNext - (uintptr_t)wszImportEnd );
+                   reinterpret_cast <uintptr_t> (wszNext) -
+                   reinterpret_cast <uintptr_t> (wszImportEnd) );
 
-      len = lstrlenW (wszImport);
+      len =
+        lstrlenW (wszImport);
     }
 
     else
@@ -638,10 +603,10 @@ iSK_INI::import (const wchar_t* import_data)
     wchar_t* wszSecondToLast =
       CharPrevW (wszImport, wszImportEnd);
 
-    wchar_t* begin = nullptr;
-    wchar_t* end   = nullptr;
+    wchar_t* begin           = nullptr;
+    wchar_t* end             = nullptr;
 
-    wchar_t* wszImportCur = &wszImport [0];
+    wchar_t* wszImportCur    = &wszImport [0];
 
     for (wchar_t* i = wszImportCur; i < wszImportEnd && i != nullptr; i = CharNextW (i))
     {
@@ -655,15 +620,14 @@ iSK_INI::import (const wchar_t* import_data)
 
       if (begin != nullptr && end != nullptr)
       {
-        wchar_t* sec_name = new wchar_t   [end - begin + 1] { };
-        size_t   sec_len  = wcrlen (begin, end);
-        wcsncpy (sec_name,          begin, sec_len);
+        auto*    sec_name = new wchar_t [end - begin + 2] { };
+        size_t   sec_len  = wcrlen            (begin, end);
+        wcsncpy (sec_name,                     begin, sec_len);
 
         //MessageBoxW (NULL, sec_name, L"Section", MB_OK);
 
         wchar_t* start  = CharNextW (CharNextW (end));
         wchar_t* finish = start;
-
         bool     eof    = false;
 
         for (wchar_t* j = start; j <= wszImportEnd; j = CharNextW (j))
@@ -687,7 +651,8 @@ iSK_INI::import (const wchar_t* import_data)
         // Import if the section already exists
         if (contains_section (sec_name))
         {
-          iSK_INISection& section = get_section (sec_name);
+          iSK_INISection& section =
+            get_section  (sec_name);
 
           Import_Section (section, start, finish);
         }
@@ -698,13 +663,11 @@ iSK_INI::import (const wchar_t* import_data)
           iSK_INISection section =
             Process_Section (sec_name, start, finish);
 
-          sections.insert (
-            std::pair <std::wstring, iSK_INISection> (
-              sec_name, section
-            )
+          sections.emplace  (
+            std::make_pair  (sec_name, section)
           );
 
-          ordered_sections.push_back (sec_name);
+          ordered_sections.emplace_back (sec_name);
         }
 
         delete [] sec_name;
@@ -720,11 +683,7 @@ iSK_INI::import (const wchar_t* import_data)
     }
   }
 
-  if (wszImport != nullptr)
-  {
-    free (wszImport);
-    wszImport = nullptr;
-  }
+  delete [] wszImport;
 }
 
 std::wstring invalid = L"Invalid";
@@ -733,10 +692,10 @@ std::wstring&
 __stdcall
 iSK_INISection::get_value (const wchar_t* key)
 {
-  auto&& it_key =
-    pairs.find (key);
+  auto it_key =
+    keys.find (key);
 
-  if (it_key != pairs.end ())
+  if (it_key != keys.end ())
     return (*it_key).second;
 
   return invalid;
@@ -753,21 +712,15 @@ bool
 __stdcall
 iSK_INISection::contains_key (const wchar_t* key)
 {
-  for ( auto& it : pairs )
-  {
-    if (it.first == std::wstring (key))
-      return true;
-  }
-
-  return false;
+  return keys.count (key) > 0;
 }
 
 void
 __stdcall
 iSK_INISection::add_key_value (const wchar_t* key, const wchar_t* value)
 {
-  pairs.insert (std::pair <std::wstring, std::wstring> (key, value));
-  ordered_keys.push_back (key);
+  keys.emplace              ( std::make_pair (key, value) );
+  ordered_keys.emplace_back (                 key         );
 }
 
 bool
@@ -782,10 +735,12 @@ __stdcall
 iSK_INI::get_section (const wchar_t* section)
 {
   if (! sections.count (section))
-    ordered_sections.push_back (section);
+    ordered_sections.emplace_back (section);
 
-  iSK_INISection& ret      = sections [section];
-                  ret.name =           section;
+  iSK_INISection& ret =
+    sections [section];
+
+  ret.name = section;
 
   return ret;
 }
@@ -811,9 +766,10 @@ iSK_INI::get_section_f ( _In_z_ _Printf_format_string_
   va_end   (_ArgList);
 
   if (! sections.count (wszFormatted))
-    ordered_sections.push_back (wszFormatted);
+    ordered_sections.emplace_back (wszFormatted);
 
-  iSK_INISection& ret = sections [wszFormatted];
+  iSK_INISection& ret =
+    sections [wszFormatted];
 
   ret.name = wszFormatted;
 
@@ -847,7 +803,7 @@ iSK_INI::write (const wchar_t* fname)
       break;
   }
 
-  if (ret != 0 || fOut == 0)
+  if (ret != 0 || fOut == nullptr)
   {
     //SK_MessageBox (L"ERROR: Cannot open INI file for writing. Is it read-only?", fname, MB_OK | MB_ICONSTOP);
     return;
@@ -860,12 +816,12 @@ iSK_INI::write (const wchar_t* fname)
   //  *** These would cause blank lines to be appended to the end of the INI file
   //        if we did not do something about them here and now. ***
   //
-  for (auto& it : ordered_sections)
+  for ( auto& it : ordered_sections )
   {
     iSK_INISection& section =
       get_section (it.c_str ());
 
-    if (! section.ordered_keys.size ())
+    if (section.ordered_keys.empty ())
     {
       remove_section (section.name.c_str ());
     }
@@ -875,18 +831,18 @@ iSK_INI::write (const wchar_t* fname)
   std::wstring outbuf = L"";
 
 
-  for (auto& it : ordered_sections)
+  for ( auto& it : ordered_sections )
   {
     iSK_INISection& section =
       get_section (it.c_str ());
 
-    if ( section.name.length       () &&
-         section.ordered_keys.size () )
+    if (    section.name.length       () &&
+         (! section.ordered_keys.empty ()) )
     {
       outbuf += L"[";
       outbuf += section.name + L"]\n";
 
-      for (auto& key_it : section.ordered_keys)
+      for ( auto& key_it : section.ordered_keys )
       {
         const std::wstring& val =
           section.get_value (key_it.c_str ());
@@ -925,7 +881,9 @@ iSK_INI::QueryInterface (THIS_ REFIID riid, void** ppvObj)
   if (IsEqualGUID (riid, IID_SK_INI))
   {
     AddRef ();
+
     *ppvObj = this;
+
     return S_OK;
   }
 
@@ -950,17 +908,19 @@ bool
 __stdcall
 iSK_INI::remove_section (const wchar_t* wszSection)
 {
-  for ( auto it  = ordered_sections.begin ();
-             it != ordered_sections.end   ();
-           ++it )
-  {
-    if (*it == wszSection)
-    {
-      ordered_sections.erase (it);
-      sections.erase         (wszSection);
+  std::wstring section_w (wszSection);
 
-      return true;
-    }
+  auto it =
+    std::find ( ordered_sections.begin (),
+                ordered_sections.end   (),
+                  section_w );
+
+  if (it != ordered_sections.end ())
+  {
+    ordered_sections.erase (it);
+    sections.erase         (section_w);
+
+    return true;
   }
 
   return false;
@@ -970,17 +930,19 @@ bool
 __stdcall
 iSK_INISection::remove_key (const wchar_t* wszKey)
 {
-  for ( auto it  = ordered_keys.begin ();
-             it != ordered_keys.end   ();
-           ++it )
-  {
-    if (*it == wszKey)
-    {
-      ordered_keys.erase (it);
-      pairs.erase        (wszKey);
+  std::wstring key_w (wszKey);
 
-      return true;
-    }
+  auto it =
+    std::find ( ordered_keys.begin (),
+                ordered_keys.end   (),
+                  key_w );
+
+  if (it != ordered_keys.end ())
+  {
+    ordered_keys.erase (it);
+    keys.erase         (key_w);
+
+    return true;
   }
 
   return false;
@@ -994,7 +956,9 @@ iSK_INISection::QueryInterface (THIS_ REFIID riid, void** ppvObj)
   if (IsEqualGUID (riid, IID_SK_INISection))
   {
     AddRef ();
+
     *ppvObj = this;
+
     return S_OK;
   }
 
@@ -1012,7 +976,15 @@ ULONG
 __stdcall
 iSK_INISection::Release (THIS)
 {
-  return InterlockedDecrement (&refs);
+  ULONG ret = InterlockedDecrement (&refs);
+
+  if (ret == 0)
+  {
+    // Add to ToFree list in future
+    //delete this;
+  }
+
+  return ret;
 }
 
 
@@ -1022,11 +994,129 @@ iSK_INI::get_filename (void) const
   return wszName;
 }
 
+bool
+iSK_INI::import_file (const wchar_t* fname)
+{
+  // We skip a few bytes (Unicode BOM) in certain circumstances, so this is the
+  //   actual pointer we need to free...
+  wchar_t *alloc         = nullptr;
+  wchar_t *wszImportName =
+    new wchar_t [wcslen (fname) + 2] { };
+
+  FILE    *fImportINI    = nullptr;
+
+  wcscpy (wszImportName, fname);
+
+  TRY_FILE_IO (_wfsopen (fname, L"rbS", _SH_DENYNO), fname, fImportINI);
+
+  if (fImportINI != nullptr)
+  {
+    auto size =
+      static_cast <long> (SK_GetFileSize (fname));
+
+    wchar_t *wszImportData = new wchar_t [size + 2] { };
+                   alloc   = wszImportData;
+
+    fread (wszImportData, size, 1, fImportINI);
+
+    fflush (fImportINI);
+    fclose (fImportINI);
+
+    // First, consider Unicode
+    // UTF16-LE  (All is well in the world)
+    if (*wszImportData == 0xFEFF)
+    {
+      ++wszImportData; // Skip the BOM
+    }
+
+    // UTF16-BE  (Somehow we are swapped)
+    else if (*wszImportData == 0xFFFE)
+    {
+      //dll_log.Log ( L"[INI Parser] Encountered Byte-Swapped Unicode INI "
+      //              L"file ('%s'), attempting to recover...",
+      //                wszImportName );
+
+      wchar_t* wszSwapMe = wszImportData;
+
+      for (int i = 0; i < size; i += 2)
+      {
+        *wszSwapMe++ =
+           _byteswap_ushort (*wszSwapMe);
+      }
+
+      ++wszImportData; // Skip the BOM
+    }
+
+    // Something else, if it's ANSI or UTF-8, let's hope Windows can figure
+    //   out what to do...
+    else
+    {
+      // Skip the silly UTF8 BOM if it is present
+      bool utf8 = (reinterpret_cast <unsigned char *> (wszImportData)) [0] == 0xEF &&
+                  (reinterpret_cast <unsigned char *> (wszImportData)) [1] == 0xBB &&
+                  (reinterpret_cast <unsigned char *> (wszImportData)) [2] == 0xBF;
+
+      const uintptr_t offset =
+        utf8 ? 3 : 0;
+
+      const int       real_size  =
+        size - static_cast <int> (offset);
+
+      char*           start_addr =
+      (reinterpret_cast <char *> (wszImportData)) + offset;
+
+      auto*           string =
+        new char [real_size];
+
+      memcpy (string, start_addr, real_size);
+
+      delete [] wszImportData;
+
+      int converted_size =
+        MultiByteToWideChar ( CP_UTF8, 0, string, real_size, nullptr, 0 );
+
+      if (! converted_size)
+      {
+        //dll_log.Log ( L"[INI Parser] Could not convert UTF-8 / ANSI Encoded "
+        //              L".ini file ('%s') to UTF-16, aborting!",
+        //                wszImportName );
+        wszImportData = nullptr;
+
+        delete [] string;
+
+        return false;
+      }
+
+      wszImportData =
+        new wchar_t [converted_size + 1] { };
+
+      MultiByteToWideChar ( CP_UTF8, 0, string, real_size, wszImportData, converted_size );
+
+      //dll_log.Log ( L"[INI Parser] Converted UTF-8 INI File: '%s'",
+                      //wszImportName );
+
+      delete [] string;
+
+      // No Byte-Order Marker
+      alloc = wszImportData;
+    }
+
+    import (wszImportData);
+
+    delete [] alloc;
+    wszImportData = nullptr;
+
+    return true;
+  }
+
+  return false;
+}
+
 iSK_INI*
 __stdcall
 SK_CreateINI (const wchar_t* const wszName)
 {
-  iSK_INI* pINI =
+  auto* pINI =
     new iSK_INI (wszName);
 
   return pINI;
