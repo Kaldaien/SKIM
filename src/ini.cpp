@@ -124,7 +124,7 @@ SK_CreateDirectories ( const wchar_t* wszPath )
 
 iSK_INI::iSK_INI (const wchar_t* filename)
 {
-  encoding_ = INI_UTF16LE;
+  encoding_ = INI_UTF8;
 
   if (wcsstr (filename, L"Version"))
     SK_CreateDirectories (filename);

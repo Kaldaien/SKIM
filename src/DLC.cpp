@@ -78,7 +78,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 1
     L"General Textures",
@@ -91,7 +91,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 2
     L"General Textures",
@@ -104,7 +104,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 3
     L"General Textures",
@@ -117,7 +117,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 4
     L"General Textures",
@@ -130,7 +130,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 5
     L"General Textures",
@@ -143,7 +143,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 6
     L"Button Mods",
@@ -156,7 +156,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
   { // 7
     L"Button Mods",
@@ -169,7 +169,7 @@ struct sk_dlc_package {
     nullptr,
 
     false,
-    0
+    nullptr
   },
 };
 
@@ -221,10 +221,10 @@ uint32_t           file_combined_bytes    = 0UL;
 
 bool final_validate = false;
 
-HWND   hWndDownloadDialog = 0;
-HWND   hWndDLCMgr         = 0;
-HANDLE hWorkerThread      = 0;
-HANDLE hTerminateEvent    = 0;
+HWND   hWndDownloadDialog = nullptr;
+HWND   hWndDLCMgr         = nullptr;
+HANDLE hWorkerThread      = nullptr;
+HANDLE hTerminateEvent    = nullptr;
 
 HWND hWndFileProgress;
 HWND hWndTotalProgress;
@@ -249,12 +249,13 @@ SKIM_CombineFiles ( const wchar_t* wszCombinedFile )
                       nullptr,
                         OPEN_ALWAYS,
                           FILE_ATTRIBUTE_NORMAL,
-                            NULL);
+                            nullptr);
 
   if (hCombinedFile == INVALID_HANDLE_VALUE)
     return false;
 
-  while ( files_to_combine.size () > 0 ) {
+  while (! files_to_combine.empty ())
+  {
     if (WaitForSingleObject (hTerminateEvent, 0) == WAIT_OBJECT_0)
       break;
 
@@ -273,7 +274,7 @@ SKIM_CombineFiles ( const wchar_t* wszCombinedFile )
       [get](UINT Msg, WPARAM wParam, LPARAM lParam) ->
         LRESULT
         {
-          if (hWndFileProgress != 0)
+          if (hWndFileProgress != nullptr)
             return SendMessage ( hWndFileProgress,
                                    Msg,
                                      wParam,
@@ -297,10 +298,10 @@ SKIM_CombineFiles ( const wchar_t* wszCombinedFile )
       CreateFile ( file_to_combine.wszLocalPath,
                      GENERIC_READ,
                        0,
-                         NULL,
+                         nullptr,
                            OPEN_EXISTING,
                              FILE_ATTRIBUTE_NORMAL,
-                               NULL );
+                               nullptr );
 
     if (hPartialFile == INVALID_HANDLE_VALUE) {
       CloseHandle (hCombinedFile);
@@ -331,8 +332,10 @@ SKIM_CombineFiles ( const wchar_t* wszCombinedFile )
   }
 
 
-  if (WaitForSingleObject (hTerminateEvent, 0) != WAIT_OBJECT_0) {
-    if (files_to_combine.size () == 0) {
+  if (WaitForSingleObject (hTerminateEvent, 0) != WAIT_OBJECT_0)
+  {
+    if (files_to_combine.empty ())
+    {
       file_to_combine.crc32c = 0x41EDFD6F;
       file_to_combine.size   = total_download_size;
       wcscpy (file_to_combine.wszLocalPath, file_to_combine.wszAppend);
@@ -359,7 +362,7 @@ SK_HashProgressCallback (uint64_t current, uint64_t total)
   if (WaitForSingleObject (hTerminateEvent, 0) == WAIT_OBJECT_0) {
     PostMessage     (hWndDownloadDialog, WM_CLOSE, 0x00, 0x00);
     ResetEvent      (hTerminateEvent);
-    hWorkerThread = 0;
+    hWorkerThread = nullptr;
     TerminateThread (GetCurrentThread (), 0x00);
   }
 
@@ -407,7 +410,7 @@ CombineThread (LPVOID user)
     [get](UINT Msg, WPARAM wParam, LPARAM lParam) ->
       LRESULT
       {
-        if (hWndFileProgress != 0)
+        if (hWndFileProgress != nullptr)
           return SendMessage ( hWndFileProgress,
                                  Msg,
                                    wParam,
@@ -433,7 +436,7 @@ CombineThread (LPVOID user)
 
   SendMessage ( hWndDownloadDialog, WM_COMBINE_DONE, 0x00, 0x00 );
 
-  hWorkerThread = 0;
+  hWorkerThread = nullptr;
 
   CloseHandle (GetCurrentThread ());
 
@@ -666,7 +669,7 @@ const InstructionSet::InstructionSet_Internal InstructionSet::CPU_Rep;
 #define LONG_SHIFT  8192
 #define SHORT_SHIFT 256
 
-typedef const uint8_t *buffer;
+using buffer = const uint8_t *;
 
 static uint32_t table        [16][256];
 static uint32_t long_shifts  [ 4][256];
@@ -990,12 +993,13 @@ uint32_t (*append_func)(uint32_t, buffer, size_t) = nullptr;
 void
 __crc32_init (void)
 {
-  if (append_func == NULL)
+  if (append_func == nullptr)
   {
     // somebody can call sw version directly, so, precalculate table for this version
     calculate_table ();
 
-    if (crc32c_hw_available ()) {
+    if (crc32c_hw_available ())
+    {
       //dll_log.Log (L"[ Checksum ] Using Hardware (SSE 4.2) CRC32C Algorithm");
       calculate_table_hw ();
       append_func = crc32c_append_hw;
@@ -1020,7 +1024,7 @@ uint64_t
 __stdcall
 SK_GetFileSize (const wchar_t* wszFile);
 
-typedef void (__stdcall *SK_HashProgressCallback_pfn)(uint64_t current, uint64_t total);
+using SK_HashProgressCallback_pfn = void (__stdcall *)(uint64_t current, uint64_t total);
 
 enum sk_hash_algo {
   SK_NO_HASH    = 0x0,
@@ -1185,7 +1189,7 @@ HashThread (LPVOID user)
 
       SendMessage (hWndDownloadDialog, WM_CLOSE, 0x00, 0x00);
 
-      hWorkerThread = 0;
+      hWorkerThread = nullptr;
 
       CloseHandle (GetCurrentThread ());
 
@@ -1196,7 +1200,8 @@ HashThread (LPVOID user)
     //
     // DLC SUCCESS, delete temp files
     //
-    else if (final_validate) {
+    else if (final_validate)
+    {
       installing->installed = true;
 
       MessageBox ( hWndDownloadDialog,
@@ -1204,12 +1209,13 @@ HashThread (LPVOID user)
                       L"Special K DLC Install",
                         MB_OK | MB_ICONINFORMATION );
 
-      while (files_to_delete.size ()) {
+      while (! files_to_delete.empty ())
+      {
         DeleteFileW (files_to_delete.front ().wszLocalPath);
         files_to_delete.pop ();
       }
 
-      hWorkerThread = 0;
+      hWorkerThread = nullptr;
 
       SendMessage (hWndDownloadDialog, WM_CLOSE, 0x00, 0x00);
 
@@ -1222,7 +1228,7 @@ HashThread (LPVOID user)
 
   SendMessage ( hWndDownloadDialog, WM_HASH_DONE, 0x00, 0x00 );
 
-  hWorkerThread = 0;
+  hWorkerThread = nullptr;
 
   CloseHandle (GetCurrentThread ());
 
@@ -1240,7 +1246,7 @@ DownloadThread (LPVOID user)
     [get](UINT Msg, WPARAM wParam, LPARAM lParam) ->
       LRESULT
       {
-        if (hWndFileProgress != 0)
+        if (hWndFileProgress != nullptr)
           return SendMessage ( hWndFileProgress,
                                  Msg,
                                    wParam,
@@ -1413,7 +1419,7 @@ END:
   if (WaitForSingleObject (hTerminateEvent, 0) == WAIT_OBJECT_0)
     ResetEvent (hTerminateEvent);
 
-  hWorkerThread = 0;
+  hWorkerThread = nullptr;
 
   CloseHandle (GetCurrentThread ());
 
@@ -1736,8 +1742,8 @@ AddItemToTree ( HWND   hwndTV,
          TVITEM         tvi;
          TVINSERTSTRUCT tvins;
   static HTREEITEM      hPrev         = (HTREEITEM)TVI_FIRST;
-  static HTREEITEM      hPrevRootItem = NULL;
-  static HTREEITEM      hPrevLev2Item = NULL;
+  static HTREEITEM      hPrevRootItem = nullptr;
+  static HTREEITEM      hPrevLev2Item = nullptr;
          HTREEITEM      hti;
 
   tvi.mask = TVIF_TEXT | TVIF_IMAGE
@@ -1787,8 +1793,8 @@ AddItemToTree ( HWND   hwndTV,
           0,
             (LPARAM)(LPTVINSERTSTRUCT)&tvins );
 
-  if (hPrev == NULL)
-      return NULL;
+  if (hPrev == nullptr)
+      return nullptr;
 
   // Save the handle to the item.
   if (nLevel == 1)
@@ -1953,16 +1959,20 @@ DLCMgr_DlgProc (
     {
       dlc_map.clear ();
 
-      if (hTerminateEvent == 0) {
+      if (hTerminateEvent == nullptr)
+      {
         hTerminateEvent =
           CreateEvent ( nullptr, TRUE, FALSE, nullptr );
       }
 
       int install_idx = -1;
 
-      if (installing != nullptr) {
-        for (int i = 0; i < sizeof (dlc_packs) / sizeof (sk_dlc_package); i++) {
-          if (installing->tree_item == dlc_packs [i].tree_item) {
+      if (installing != nullptr)
+      {
+        for (int i = 0; i < sizeof (dlc_packs) / sizeof (sk_dlc_package); i++)
+        {
+          if (installing->tree_item == dlc_packs [i].tree_item)
+          {
             install_idx = i;
             break;
           }
@@ -2006,37 +2016,43 @@ DLCMgr_DlgProc (
       // SIID_SETTINGS / SIID_DELETE
       AddItemToTree (GetDlgItem (hWndDlg, IDC_DLC_TREE), L"General Texture Packs",      2, false);
 
-      for (int i = 0; i < sizeof (dlc_packs) / sizeof (sk_dlc_package); i++) {
-        if (! _wcsicmp (dlc_packs [i].wszCategory, L"General Textures")) {
-          if (GetFileAttributes (dlc_packs [i].wszLocalPath) != INVALID_FILE_ATTRIBUTES) {
-            dlc_packs [i].installed = true;
+      for (auto& dlc_pack : dlc_packs)
+      {
+        if (! _wcsicmp (dlc_pack.wszCategory, L"General Textures"))
+        {
+          if (GetFileAttributes (dlc_pack.wszLocalPath) != INVALID_FILE_ATTRIBUTES)
+          {
+            dlc_pack.installed = true;
           }
 
-          dlc_packs [i].tree_item =
+          dlc_pack.tree_item =
             AddItemToTree ( GetDlgItem (hWndDlg, IDC_DLC_TREE),
-                              dlc_packs [i].wszName,
+                              dlc_pack.wszName,
                                 3,
-                                  dlc_packs [i].installed );
+                                  dlc_pack.installed );
 
-          dlc_map [dlc_packs [i].tree_item] = &dlc_packs [i];
+          dlc_map [dlc_pack.tree_item] = &dlc_pack;
         }
       }
 
       AddItemToTree (GetDlgItem (hWndDlg, IDC_DLC_TREE), L"Button Mods",                2, false);
 
-      for (int i = 0; i < sizeof (dlc_packs) / sizeof (sk_dlc_package); i++) {
-        if (! _wcsicmp (dlc_packs [i].wszCategory, L"Button Mods")) {
-          if (GetFileAttributes (dlc_packs [i].wszLocalPath) != INVALID_FILE_ATTRIBUTES) {
-            dlc_packs [i].installed = true;
+      for (auto& dlc_pack : dlc_packs)
+      {
+        if (! _wcsicmp (dlc_pack.wszCategory, L"Button Mods"))
+        {
+          if (GetFileAttributes (dlc_pack.wszLocalPath) != INVALID_FILE_ATTRIBUTES)
+          {
+            dlc_pack.installed = true;
           }
 
-          dlc_packs [i].tree_item =
+          dlc_pack.tree_item =
             AddItemToTree ( GetDlgItem (hWndDlg, IDC_DLC_TREE),
-                              dlc_packs [i].wszName,
+                              dlc_pack.wszName,
                                 3,
-                                  dlc_packs [i].installed );
+                                  dlc_pack.installed );
 
-          dlc_map [dlc_packs [i].tree_item] = &dlc_packs [i];
+          dlc_map [dlc_pack.tree_item] = &dlc_pack;
         }
       }
 
@@ -2133,7 +2149,7 @@ DLCMgr_DlgProc (
     case WM_CLOSE:
     case WM_DESTROY:
     {
-      hWndDLCMgr = 0;
+      hWndDLCMgr = nullptr;
       EndDialog   (hWndDlg, 0x0);
       //return (INT_PTR)true;
     }
@@ -2277,7 +2293,8 @@ DLC_DlgProc (
     {
       file_downloaded_bytes = 0UL;
 
-      if (files_to_download.size () > 0) {
+      if (! files_to_download.empty ())
+      {
         memcpy ( &file_to_download,
                   &files_to_download.front (),
                     sizeof sk_internet_get_t );
@@ -2303,8 +2320,10 @@ DLC_DlgProc (
         }
       }
 
-      else {
-        if (files_to_hash.size () > 0) {
+      else
+      {
+        if (! files_to_hash.empty ())
+        {
           SendMessage (hWndDlg, WM_HASH_DONE, 0x00, 0x00);
         }
       }
@@ -2314,7 +2333,8 @@ DLC_DlgProc (
     {
       file_hashed_bytes = 0UL;
 
-      if (files_to_hash.size () > 0) {
+      if (! files_to_hash.empty ())
+      {
         memcpy ( &file_to_hash,
                    &files_to_hash.front (),
                      sizeof sk_internet_get_t );
@@ -2333,8 +2353,10 @@ DLC_DlgProc (
           CreateThread (nullptr, 0, HashThread, &file_to_hash, 0x00, nullptr);
       }
 
-      else if (! final_validate) {
-        if (files_to_combine.size () > 0) {
+      else if (! final_validate)
+      {
+        if (! files_to_combine.empty ())
+        {
           memcpy ( &file_to_combine,
                      &files_to_combine.front (),
                        sizeof sk_internet_get_t );
@@ -2347,7 +2369,7 @@ DLC_DlgProc (
 
     case WM_INITDIALOG:
     {
-      if (hTerminateEvent != 0)
+      if (hTerminateEvent != nullptr)
         ResetEvent (hTerminateEvent);
 
       total_downloaded_bytes = 0;
@@ -2373,61 +2395,59 @@ DLC_DlgProc (
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_RIGHT   | ES_SAVESEL | WS_DISABLED,
                            260, 10, 193, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
        dlc_op.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("CURRENT DOWNLOAD OP"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_LEFT    | ES_SAVESEL | WS_DISABLED,
                            10, 10, 250, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       dlc_current_file.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("SINGLE FILE NAME"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_LEFT    | ES_SAVESEL | WS_DISABLED,
                            10, 69, 250, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       dlc_current_size.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("SINGLE FILE SIZE"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_RIGHT   | ES_SAVESEL | WS_DISABLED,
                            260, 69, 193, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       std::vector <HANDLE> head_threads;
 
-      for ( auto it  = files_to_lookup.begin ();
-                 it != files_to_lookup.end   ();
-               ++it                              ) {
-        it->hThread =
+      for (auto& it : files_to_lookup)
+      {
+        it.hThread =
           CreateThread (
             nullptr,
               0,
                 HeaderThread,
-                  (LPVOID)&(*it),
+                  (LPVOID)&it,
                     0x00,
                       nullptr
           );
-        head_threads.push_back (it->hThread);
+        head_threads.push_back (it.hThread);
       }
 
       WaitForMultipleObjects ( (DWORD)head_threads.size (), &head_threads [0], TRUE, INFINITE );
 
-      for ( auto it  = files_to_lookup.begin ();
-                 it != files_to_lookup.end   ();
-               ++it                              ) {
+      for (auto& it : files_to_lookup) 
+      {
         sk_internet_get_t get =
           files_to_download.front ();
 
         files_to_download.pop ();
 
-        get.size = it->size;
+        get.size = it.size;
 
         files_to_download.push (get);
 
-        total_download_size += it->size;
+        total_download_size += it.size;
       }
 
       hWndFileProgress =
@@ -2485,12 +2505,12 @@ DLC_DlgProc (
       dlc_op.set           (RGB (0,0,0), L"", L"");
       dlc_current_file.set (L"");
 
-      if (hWorkerThread != 0 && hTerminateEvent) {
+      if (hWorkerThread != nullptr && hTerminateEvent) {
         SetEvent (hTerminateEvent);
-        hWorkerThread = 0;
+        hWorkerThread = nullptr;
       }
 
-      hWndDownloadDialog = 0;
+      hWndDownloadDialog = nullptr;
       EndDialog   (hWndDlg, 0x0);
 
       return (INT_PTR)true;
@@ -2533,7 +2553,7 @@ DLCDlg_Thread (LPVOID user)
                        (HWND)0,
                          DLCMgr_DlgProc );
 
-  if (hWndDLCMgr != 0)
+  if (hWndDLCMgr != nullptr)
     SetWindowText (hWndDLCMgr, L"Manage DLC");
 
   MSG  msg;
@@ -2541,14 +2561,14 @@ DLCDlg_Thread (LPVOID user)
 
   static bool last_downloading = false;
 
-  while (hWndDLCMgr != 0 && (bRet = GetMessage (&msg, hWndDLCMgr, 0, 0)) != 0)
+  while (hWndDLCMgr != nullptr && (bRet = GetMessage (&msg, hWndDLCMgr, 0, 0)) != 0)
   {
-    if (hWndDownloadDialog != 0) {
+    if (hWndDownloadDialog != nullptr) {
       last_downloading = true;
       continue;
     }
 
-    if (last_downloading && hWndDLCMgr != 0) {
+    if (last_downloading && hWndDLCMgr != nullptr) {
       SendMessage (hWndDLCMgr, WM_INITDIALOG, 0x00, 0x00);
       last_downloading = false;
     }
@@ -2557,7 +2577,7 @@ DLCDlg_Thread (LPVOID user)
       return 0;
     }
 
-    if (hWndDLCMgr != 0) {
+    if (hWndDLCMgr != nullptr) {
       TranslateMessage (&msg);
       DispatchMessage  (&msg);
     }
@@ -2582,13 +2602,13 @@ DLCDownload_Thread (LPVOID user)
   MSG  msg;
   BOOL bRet;
 
-  while (hWndDownloadDialog != 0 && (bRet = GetMessage (&msg, hWndDownloadDialog, 0, 0)) != 0)
+  while (hWndDownloadDialog != nullptr && (bRet = GetMessage (&msg, hWndDownloadDialog, 0, 0)) != 0)
   {
     if (bRet == -1) {
       return 0;
     }
 
-    if (hWndDownloadDialog != 0) {
+    if (hWndDownloadDialog != nullptr) {
       TranslateMessage (&msg);
       DispatchMessage  (&msg);
     }

@@ -52,11 +52,12 @@ UNREFERENCED_PARAMETER (product);
     return false;
   }
 
-  wchar_t wszRemoteRepoURL [MAX_PATH] = { };
+  wchar_t wszRemoteRepoURL [INTERNET_MAX_PATH_LENGTH] = { };
 
-  wsprintf ( wszRemoteRepoURL,
-               L"/Kaldaien/SpecialK/0.8.x/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
+  _snwprintf ( wszRemoteRepoURL,
+                 INTERNET_MAX_PATH_LENGTH,
+                   L"/Kaldaien/SpecialK/0.8.x/%s",
+                     /*product.wszRepoName,*/ wszRemoteFile );
 
   PCWSTR  rgpszAcceptTypes []         = { L"*/*", nullptr };
 
@@ -92,7 +93,8 @@ UNREFERENCED_PARAMETER (product);
                                           0x00, NULL )
       )
     {
-      DWORD dwAttribs = GetFileAttributes (wszRemoteFile);
+      DWORD dwAttribs =
+        GetFileAttributes (wszRemoteFile);
 
       if (dwAttribs == INVALID_FILE_ATTRIBUTES)
         dwAttribs = FILE_ATTRIBUTE_NORMAL;
@@ -121,7 +123,7 @@ UNREFERENCED_PARAMETER (product);
                                       &dwRead )
           )
         {
-          DWORD dwWritten;
+          DWORD dwWritten = 0;
 
           WriteFile ( hVersionFile,
                         pData,
@@ -189,9 +191,9 @@ static uint64_t           total_fetched_bytes = 0ULL;
 static uint32_t           file_fetched_size   = 0UL;
 static uint32_t           file_fetched_bytes  = 0UL;
 
-static HWND               hWndDownloadDialog  = 0;
-static HANDLE             hWorkerThread       = 0;
-static HANDLE             hTerminateEvent     = 0;
+static HWND               hWndDownloadDialog  = nullptr;
+static HANDLE             hWorkerThread       = nullptr;
+static HANDLE             hTerminateEvent     = nullptr;
 
 static HWND               hWndFileProgress;
 static HWND               hWndTotalProgress;
@@ -278,11 +280,13 @@ struct {
 } fetch_file_progress;
 
 struct {
-  HWND    hWndCtl;
-  wchar_t wszFile [MAX_PATH];
+  HWND    hWndCtl                =  nullptr;
+  wchar_t wszFile [MAX_PATH + 2] = { };
 
-  void set (const wchar_t* val) {
-    if (_wcsnicmp (val, wszFile, MAX_PATH)) {
+  void set (const wchar_t* val)
+  {
+    if (_wcsnicmp (val, wszFile, MAX_PATH))
+    {
       wcsncpy (wszFile, val, MAX_PATH);
 
       CHARFORMAT2W cf2;
@@ -302,11 +306,13 @@ struct {
 } fetch_current_file;
 
 struct {
-  HWND    hWndCtl;
-  wchar_t wszSize [64];
+  HWND    hWndCtl      =  nullptr;
+  wchar_t wszSize [66] = { };
 
-  void set (const wchar_t* val) {
-    if (_wcsnicmp (val, wszSize, 64)) {
+  void set (const wchar_t* val)
+  {
+    if (_wcsnicmp (val, wszSize, 64))
+    {
       wcsncpy (wszSize, val, 64);
 
       CHARFORMAT2W cf2;
@@ -326,11 +332,13 @@ struct {
 } fetch_current_size;
 
 struct {
-  HWND    hWndCtl;
-  wchar_t wszSize [64];
+  HWND    hWndCtl      =  nullptr;
+  wchar_t wszSize [62] = { };
 
-  void set (const wchar_t* val) {
-    if (_wcsnicmp (val, wszSize, 64)) {
+  void set (const wchar_t* val)
+  {
+    if (_wcsnicmp (val, wszSize, 64))
+    {
       wcsncpy (wszSize, val, 64);
 
       CHARFORMAT2W cf2;
@@ -353,7 +361,7 @@ DWORD
 __stdcall
 HeaderThread (LPVOID user)
 {
-  sk_internet_head_t* head =
+  auto* head =
     (sk_internet_head_t *)user;
 
   HINTERNET hInetRoot =
@@ -440,14 +448,14 @@ DWORD
 WINAPI
 DownloadThread (LPVOID user)
 {
-  sk_internet_get_t* get =
+  auto* get =
     (sk_internet_get_t *)user;
 
   auto ProgressMsg =
     [get](UINT Msg, WPARAM wParam, LPARAM lParam) ->
       LRESULT
       {
-        if (hWndFileProgress != 0)
+        if (hWndFileProgress != nullptr)
           return SendMessage ( hWndFileProgress,
                                  Msg,
                                    wParam,
@@ -615,7 +623,7 @@ END:
   if (WaitForSingleObject (hTerminateEvent, 0) == WAIT_OBJECT_0)
     ResetEvent (hTerminateEvent);
 
-  hWorkerThread = 0;
+  hWorkerThread = nullptr;
 
   CloseHandle (GetCurrentThread ());
 
@@ -642,7 +650,7 @@ Fetch_DlgProc (
 
       if (timeGetTime () - last_update > 125)
       {
-        wchar_t wszTotalSize [64] = { L'\0' };
+        wchar_t wszTotalSize [64] = { };
 
         _swprintf ( wszTotalSize,
                       L"%7.2f MiB / %7.2f MiB",
@@ -676,7 +684,8 @@ Fetch_DlgProc (
     {
       file_fetched_bytes = 0UL;
 
-      if (files_to_fetch.size () > 0) {
+      if (! files_to_fetch.empty ())
+      {
         memcpy ( &file_to_fetch,
                   &files_to_fetch.front (),
                     sizeof sk_internet_get_t );
@@ -700,7 +709,7 @@ Fetch_DlgProc (
     {
       SetWindowTextW (hWndDlg, L"SKIM Downloader");
 
-      if (hTerminateEvent != 0)
+      if (hTerminateEvent != nullptr)
         ResetEvent (hTerminateEvent);
 
       total_fetched_bytes = 0;
@@ -724,62 +733,59 @@ Fetch_DlgProc (
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_RIGHT   | ES_SAVESEL | WS_DISABLED,
                            260, 10, 193, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
        fetch_op.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("CURRENT DOWNLOAD OP"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_LEFT    | ES_SAVESEL | WS_DISABLED,
                            10, 10, 250, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       fetch_current_file.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("SINGLE FILE NAME"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_LEFT    | ES_SAVESEL | WS_DISABLED,
                            10, 69, 250, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       fetch_current_size.hWndCtl =
         CreateWindowEx ( 0, MSFTEDIT_CLASS, TEXT ("SINGLE FILE SIZE"),
                            WS_VISIBLE | WS_CHILD   | ES_READONLY |
                            ES_RIGHT   | ES_SAVESEL | WS_DISABLED,
                            260, 69, 193, 28,
-                           hWndDlg, NULL, GetModuleHandle (nullptr), NULL );
+                           hWndDlg, nullptr, GetModuleHandle (nullptr), nullptr );
 
       std::vector <HANDLE> head_threads;
 
-      for ( auto it  = files_to_lookup.begin ();
-                 it != files_to_lookup.end   ();
-               ++it                              ) {
-        it->hThread =
+      for (auto& it : files_to_lookup)
+      {
+        it.hThread =
           CreateThread (
             nullptr,
               0,
                 HeaderThread,
-                  (LPVOID)&(*it),
+                  (LPVOID)&it,
                     0x00,
                       nullptr
           );
-        head_threads.push_back (it->hThread);
+        head_threads.push_back (it.hThread);
       }
 
       WaitForMultipleObjects ( (DWORD)head_threads.size (), &head_threads [0], TRUE, INFINITE );
 
-      for ( auto it  = files_to_lookup.begin ();
-                 it != files_to_lookup.end   ();
-               ++it                              )
+      for (auto& it : files_to_lookup)
       {
         sk_internet_get_t get =
           files_to_fetch.front ();
 
         files_to_fetch.pop ();
 
-        get.size   = it->size;
+        get.size   = it.size;
 
         files_to_fetch.push (get);
 
-        total_fetch_size += it->size;
+        total_fetch_size += it.size;
       }
 
       hWndFileProgress =
@@ -823,12 +829,12 @@ Fetch_DlgProc (
       fetch_op.set           (RGB (0,0,0), L"", L"");
       fetch_current_file.set (L"");
 
-      if (hWorkerThread != 0 && hTerminateEvent) {
+      if (hWorkerThread != nullptr && hTerminateEvent) {
         SetEvent (hTerminateEvent);
-        hWorkerThread = 0;
+        hWorkerThread = nullptr;
       }
 
-      hWndDownloadDialog = 0;
+      hWndDownloadDialog = nullptr;
       EndDialog   (hWndDlg, 0x0);
 
       return (INT_PTR)true;
@@ -847,7 +853,7 @@ extern HWND hWndMainDlg;
 
 DWORD
 __stdcall
-SKIM_Download_Thread (LPVOID user)
+SKIM_DownloadDlg (LPVOID user)
 {
   static bool init = false;
 
@@ -874,13 +880,13 @@ SKIM_Download_Thread (LPVOID user)
   MSG  msg;
   BOOL bRet;
 
-  while (hWndDownloadDialog != 0 && (bRet = GetMessage (&msg, hWndDownloadDialog, 0, 0)) != 0)
+  while (hWndDownloadDialog != nullptr && (bRet = GetMessage (&msg, hWndDownloadDialog, 0, 0)) != 0)
   {
     if (bRet == -1) {
       return 0;
     }
 
-    if (hWndDownloadDialog != 0) {
+    if (hWndDownloadDialog != nullptr) {
       TranslateMessage (&msg);
       DispatchMessage  (&msg);
     }
@@ -888,6 +894,45 @@ SKIM_Download_Thread (LPVOID user)
 
   return 0;
 }
+
+void
+SKIM_WaitForFile (const wchar_t* wszFile)
+{
+  const DWORD  TIMEOUT = 666UL;
+        DWORD  dwStart = timeGetTime ();
+        HANDLE hFile   = nullptr;
+
+  while (hFile == nullptr)
+  {
+    hFile =
+      CreateFileW ( wszFile,
+                      GENERIC_READ      | GENERIC_EXECUTE,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE |
+                        FILE_SHARE_DELETE,
+                          nullptr,
+                            OPEN_EXISTING,
+                              GetFileAttributes (wszFile),
+                                nullptr );
+
+    if (hFile == nullptr)
+    {
+      if (timeGetTime () > dwStart + TIMEOUT)
+      {
+        MessageBox ( nullptr,
+                     L"File I/O Timed Out\r\n\r\n"
+                     L"\tPlease verify firewall and anti-virus settings",
+                       L"Install Failed",
+                         MB_ICONASTERISK );
+        break;
+      }
+
+      SleepEx (16UL, TRUE);
+    }
+  }
+
+  CloseHandle (hFile);
+}
+
 
 bool
 __stdcall
@@ -902,28 +947,29 @@ L"installer64.dll"
 {
   SKIM_Util_MoveFileNoFail (product.wszWrapper, L"Version/wrapper.old");
 
-  wchar_t wszRemoteRepoURL [MAX_PATH * 2] = { };
+  wchar_t wszRemoteRepoURL [INTERNET_MAX_PATH_LENGTH + 2] = { };
 
-  wsprintf ( wszRemoteRepoURL,
-               L"/Kaldaien/SpecialK/0.8.x/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
+  _snwprintf ( wszRemoteRepoURL,
+                 INTERNET_MAX_PATH_LENGTH,
+                   L"/Kaldaien/SpecialK/0.8.x/%s",
+                    /*product.wszRepoName,*/ wszRemoteFile );
 
   static sk_internet_head_t head;
   static sk_internet_get_t  get;
 
-  wcscpy (get.wszLocalPath, product.wszWrapper);
-  wcscpy (get.wszHostName,  L"raw.githubusercontent.com");
-  wcscpy (get.wszHostPath,  wszRemoteRepoURL);
+  wcsncpy (get.wszLocalPath, product.wszWrapper,           MAX_PATH);
+  wcsncpy (get.wszHostName,  L"raw.githubusercontent.com", INTERNET_MAX_HOST_NAME_LENGTH);
+  wcsncpy (get.wszHostPath,  wszRemoteRepoURL,             INTERNET_MAX_PATH_LENGTH);
 
-  wcscpy (head.wszHostName,  L"raw.githubusercontent.com");
-  wcscpy (head.wszHostPath,  wszRemoteRepoURL);
+  wcsncpy (head.wszHostName,  L"raw.githubusercontent.com", INTERNET_MAX_HOST_NAME_LENGTH);
+  wcsncpy (head.wszHostPath,  wszRemoteRepoURL,             INTERNET_MAX_PATH_LENGTH);
+
 
   files_to_fetch.push       (get);
   files_to_lookup.push_back (head);
 
-  SKIM_Download_Thread (nullptr);
-
-  Sleep (250UL);
+  SKIM_DownloadDlg (nullptr);
+  SKIM_WaitForFile (product.wszWrapper);
 
   return true;
 }
@@ -939,43 +985,33 @@ L"injector64.dll"
 #endif
 )
 {
-  wchar_t wszOld [MAX_PATH * 2] = { };
-  swprintf (wszOld, L"Version/%s.old", wszRemoteFile);
+  wchar_t wszOld [INTERNET_MAX_PATH_LENGTH + 2] = { };
+  _snwprintf (wszOld, INTERNET_MAX_PATH_LENGTH, L"Version/%s.old", wszRemoteFile);
 
   SKIM_Util_MoveFileNoFail (product.wszWrapper, wszOld);
 
-  wchar_t wszRemoteRepoURL [MAX_PATH * 2] = { };
+  wchar_t wszRemoteRepoURL [INTERNET_MAX_PATH_LENGTH + 2] = { };
 
-  wsprintf ( wszRemoteRepoURL,
-               L"/Kaldaien/SpecialK/0.8.x/%s",
-                /*product.wszRepoName,*/ wszRemoteFile );
+  _snwprintf ( wszRemoteRepoURL,
+               INTERNET_MAX_PATH_LENGTH,
+                 L"/Kaldaien/SpecialK/0.8.x/%s",
+                  /*product.wszRepoName,*/ wszRemoteFile );
 
   static sk_internet_head_t head;
   static sk_internet_get_t  get;
 
-  wcscpy (get.wszLocalPath, product.wszWrapper);
-  wcscpy (get.wszHostName,  L"raw.githubusercontent.com");
-  wcscpy (get.wszHostPath,  wszRemoteRepoURL);
+  wcsncpy (get.wszLocalPath, product.wszWrapper,           MAX_PATH);
+  wcsncpy (get.wszHostName,  L"raw.githubusercontent.com", INTERNET_MAX_HOST_NAME_LENGTH);
+  wcsncpy (get.wszHostPath,  wszRemoteRepoURL,             INTERNET_MAX_PATH_LENGTH);
 
-  wcscpy (head.wszHostName, L"raw.githubusercontent.com");
-  wcscpy (head.wszHostPath, wszRemoteRepoURL);
+  wcsncpy (head.wszHostName, L"raw.githubusercontent.com", INTERNET_MAX_HOST_NAME_LENGTH);
+  wcsncpy (head.wszHostPath, wszRemoteRepoURL,             INTERNET_MAX_PATH_LENGTH);
 
   files_to_fetch.push       (get);
   files_to_lookup.push_back (head);
 
-  SKIM_Download_Thread (nullptr);
-
-  HANDLE hFile = 0;
-
-  while (hFile == 0)
-  {
-    hFile = CreateFileW (product.wszWrapper, GENERIC_READ | GENERIC_EXECUTE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, GetFileAttributes (product.wszWrapper), nullptr);
-
-    if (hFile == 0)
-      Sleep (133UL);
-  }
-
-  CloseHandle (hFile);
+  SKIM_DownloadDlg (nullptr);
+  SKIM_WaitForFile (product.wszWrapper);
 
   return true;
 }

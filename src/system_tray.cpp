@@ -26,27 +26,27 @@ static const GUID SKIM_SystemTray_UUID =
 { 0x12bfdbd, 0x790d, 0x4a7b, { 0x9b, 0xc4, 0xa2, 0x63, 0x2d, 0x25, 0x69, 0xd9 } };
 
        HICON           hIconSKIM_Tray;
-static HMENU           hTrayMenu              = 0;
-static HMENU           hTrayProductSelectMenu = 0;
+static HMENU           hTrayMenu              = nullptr;
+static HMENU           hTrayProductSelectMenu = nullptr;
 static NOTIFYICONDATAW sys_tray_icon          = { };
 
-static HBITMAP hIconExit          = 0;
-static HBITMAP hIconStart         = 0;
-static HBITMAP hIconStop          = 0;
-static HBITMAP hIconStartAtLaunch = 0;
-static HBITMAP hIconMenu          = 0;
+static HBITMAP hIconExit          = nullptr;
+static HBITMAP hIconStart         = nullptr;
+static HBITMAP hIconStop          = nullptr;
+static HBITMAP hIconStartAtLaunch = nullptr;
+static HBITMAP hIconMenu          = nullptr;
 
-static HBITMAP hIconBackup        = 0;
-static HBITMAP hIconBranch        = 0;
-static HBITMAP hIconFolder        = 0;
-static HBITMAP hIconInfo          = 0;
-static HBITMAP hIconInstall       = 0;
-static HBITMAP hIconLogs          = 0;
-static HBITMAP hIconConfig        = 0;
-static HBITMAP hIconReleaseNotes  = 0;
-static HBITMAP hIconUninstall     = 0;
-static HBITMAP hIconUpdate        = 0;
-static HBITMAP hIconUtility       = 0;
+static HBITMAP hIconBackup        = nullptr;
+static HBITMAP hIconBranch        = nullptr;
+static HBITMAP hIconFolder        = nullptr;
+static HBITMAP hIconInfo          = nullptr;
+static HBITMAP hIconInstall       = nullptr;
+static HBITMAP hIconLogs          = nullptr;
+static HBITMAP hIconConfig        = nullptr;
+static HBITMAP hIconReleaseNotes  = nullptr;
+static HBITMAP hIconUninstall     = nullptr;
+static HBITMAP hIconUpdate        = nullptr;
+static HBITMAP hIconUtility       = nullptr;
 
 auto ApplyBitmap =
 [ ](HBITMAP hBitmap, UINT_PTR idx, HMENU hMenu)
@@ -79,10 +79,10 @@ void
 SKIM_Tray_ResetMenu (void)
 {
   DestroyMenu (hTrayMenu);
-  hTrayMenu = 0;
+  hTrayMenu = nullptr;
 
   DestroyMenu (hTrayProductSelectMenu);
-  hTrayProductSelectMenu = 0;
+  hTrayProductSelectMenu = nullptr;
 }
 
 
@@ -129,19 +129,19 @@ SKIM_Tray_RefreshMenu (HWND hWndDlg, bool add)
 
   wcsncpy (sys_tray_icon.szTip, inject_summary.c_str (), 127);
   
-  if (hIconExit          == 0) { hIconExit          = LoadAndApplyBitmap (IDB_EXIT,    MENUCMD_EXIT,            hTrayMenu); }
+  if (hIconExit          == nullptr) { hIconExit          = LoadAndApplyBitmap (IDB_EXIT,    MENUCMD_EXIT,            hTrayMenu); }
   else                                                       ApplyBitmap (hIconExit,   MENUCMD_EXIT,            hTrayMenu);
 
   if (SKIM_FindProductByAppID (0)->install_state == 1)
   {
-    if (hIconStart         == 0) { hIconStart         = LoadAndApplyBitmap (IDB_START,   MENUCMD_START_INJECTION, hTrayMenu); }
+    if (hIconStart         == nullptr) { hIconStart         = LoadAndApplyBitmap (IDB_START,   MENUCMD_START_INJECTION, hTrayMenu); }
     else                                                       ApplyBitmap (hIconStart,  MENUCMD_START_INJECTION, hTrayMenu);
 
-    if (hIconStop          == 0) { hIconStop          = LoadAndApplyBitmap (IDB_STOP,    MENUCMD_STOP_INJECTION,  hTrayMenu); }
+    if (hIconStop          == nullptr) { hIconStop          = LoadAndApplyBitmap (IDB_STOP,    MENUCMD_STOP_INJECTION,  hTrayMenu); }
     else                                                       ApplyBitmap (hIconStop,   MENUCMD_STOP_INJECTION,  hTrayMenu);
   }
 
-  if (hIconMenu          == 0) { hIconMenu          = LoadAndApplyBitmap (IDB_MENU,    (UINT_PTR)hTrayProductSelectMenu,  hTrayMenu); }
+  if (hIconMenu          == nullptr) { hIconMenu          = LoadAndApplyBitmap (IDB_MENU,    (UINT_PTR)hTrayProductSelectMenu,  hTrayMenu); }
   else                                                       ApplyBitmap (hIconMenu,   (UINT_PTR)hTrayProductSelectMenu,  hTrayMenu);
 
   //if (hIconStartAtLaunch == 0) { hIconStartAtLaunch = LoadAndApplyIcon (IDI_STARTUP, 1, hTrayMenu); }
@@ -159,7 +159,7 @@ SKIM_Tray_RefreshMenu (HWND hWndDlg, bool add)
   Shell_NotifyIcon (NIM_SETVERSION, &sys_tray_icon);
 
 
-  RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
+  RedrawWindow (hWndDlg, nullptr, nullptr, 0x00);
 }
 
 void
@@ -168,7 +168,7 @@ SKIM_Tray_SendTo (HWND hWndDlg)
   SKIM_Tray_RefreshMenu (hWndDlg, true);
 
   ShowWindow   (hWndDlg, SW_HIDE);
-  RedrawWindow (hWndDlg, nullptr, NULL, 0x00);
+  RedrawWindow (hWndDlg, nullptr, nullptr, 0x00);
 }
 
 void
@@ -241,11 +241,11 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
         }
       }
 
-      wchar_t   wszBranchSelect [MAX_PATH] = { };
+      wchar_t   wszBranchSelect [MAX_PATH + 2] = { };
       swprintf (wszBranchSelect, L"  Branch: %ws", current.c_str ());
 
       AppendMenu (prod->menus.hProductMenu, MF_POPUP | MF_STRING, (INT_PTR)prod->menus.hBranchMenu, wszBranchSelect);
-      if (hIconBranch == 0) { hIconBranch = LoadAndApplyBitmap (IDB_BRANCH,  (INT_PTR)prod->menus.hBranchMenu, prod->menus.hProductMenu); }
+      if (hIconBranch == nullptr) { hIconBranch = LoadAndApplyBitmap (IDB_BRANCH,  (INT_PTR)prod->menus.hBranchMenu, prod->menus.hProductMenu); }
       else                                         ApplyBitmap (hIconBranch, (INT_PTR)prod->menus.hBranchMenu, prod->menus.hProductMenu);
 
 
@@ -258,26 +258,26 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
 
 
     AppendMenu (prod->menus.hProductMenu, MF_BYCOMMAND | MF_STRING, 128 * (idx+1) + MENUCMD_CHECK_VERSION, L"  Check Version");
-    if (hIconUpdate == 0) { hIconUpdate = LoadAndApplyBitmap (IDB_UPDATE, 128 * (idx+1) + MENUCMD_CHECK_VERSION, prod->menus.hProductMenu); }
+    if (hIconUpdate == nullptr) { hIconUpdate = LoadAndApplyBitmap (IDB_UPDATE, 128 * (idx+1) + MENUCMD_CHECK_VERSION, prod->menus.hProductMenu); }
     else                                         ApplyBitmap (hIconUpdate, 128 * (idx+1) + MENUCMD_CHECK_VERSION, prod->menus.hProductMenu);
 
 
     AppendMenu (prod->menus.hProductMenu, MF_BYCOMMAND | MF_STRING, 128 * (idx+1) + MENUCMD_UNINSTALL,     L"  Uninstall");
-    if (hIconUninstall == 0) { hIconUninstall = LoadAndApplyBitmap (IDB_UNINSTALL,  128 * (idx+1) + MENUCMD_UNINSTALL, prod->menus.hProductMenu); }
+    if (hIconUninstall == nullptr) { hIconUninstall = LoadAndApplyBitmap (IDB_UNINSTALL,  128 * (idx+1) + MENUCMD_UNINSTALL, prod->menus.hProductMenu); }
     else                                               ApplyBitmap (hIconUninstall, 128 * (idx+1) + MENUCMD_UNINSTALL, prod->menus.hProductMenu);
 
 
     //AppendMenu (prod->menus.hFileMenu, MF_BYCOMMAND | MF_STRING, 128 * (idx+1) + MENUCMD_DIR_ASSETS, L"Browse Assets");
     AppendMenu (prod->menus.hFileMenu, MF_BYCOMMAND | MF_STRING, 128 * (idx+1) + MENUCMD_DIR_BACKUPS,L"Browse Backups");
-    if (hIconBackup == 0) { hIconBackup = LoadAndApplyBitmap (IDB_BACKUP,  128 * (idx+1) + MENUCMD_DIR_BACKUPS, prod->menus.hFileMenu); }
+    if (hIconBackup == nullptr) { hIconBackup = LoadAndApplyBitmap (IDB_BACKUP,  128 * (idx+1) + MENUCMD_DIR_BACKUPS, prod->menus.hFileMenu); }
     else                                         ApplyBitmap (hIconBackup, 128 * (idx+1) + MENUCMD_DIR_BACKUPS, prod->menus.hFileMenu);
                     
     AppendMenu (prod->menus.hFileMenu, MF_BYCOMMAND | MF_STRING, 128 * (idx+1) + MENUCMD_DIR_CONFIG, L"Browse Config");
-    if (hIconConfig == 0) { hIconConfig = LoadAndApplyBitmap (IDB_CONFIG,  128 * (idx+1) + MENUCMD_DIR_CONFIG, prod->menus.hFileMenu); }
+    if (hIconConfig == nullptr) { hIconConfig = LoadAndApplyBitmap (IDB_CONFIG,  128 * (idx+1) + MENUCMD_DIR_CONFIG, prod->menus.hFileMenu); }
     else                                         ApplyBitmap (hIconConfig, 128 * (idx+1) + MENUCMD_DIR_CONFIG, prod->menus.hFileMenu);
 
     AppendMenu (prod->menus.hFileMenu, MF_BYCOMMAND | MF_STRING,       128 * (idx+1) + MENUCMD_DIR_LOGS, L"Browse Logs");
-    if (hIconLogs == 0) { hIconLogs = LoadAndApplyBitmap (IDB_LOGS,    128 * (idx+1) + MENUCMD_DIR_LOGS, prod->menus.hFileMenu); }
+    if (hIconLogs == nullptr) { hIconLogs = LoadAndApplyBitmap (IDB_LOGS,    128 * (idx+1) + MENUCMD_DIR_LOGS, prod->menus.hFileMenu); }
     else                                     ApplyBitmap (hIconLogs, 128 * (idx+1) + MENUCMD_DIR_LOGS, prod->menus.hFileMenu);
   }
   else
@@ -293,14 +293,14 @@ SKIM_Tray_SetupProductMenu (sk_product_t* prod)
   if (prod->install_state != 0 && (prod->bHasDLC || wcslen (prod->wszConfigTool)))
   {
     AppendMenu (prod->menus.hProductMenu, MF_MOUSESELECT | MF_POPUP, (UINT_PTR)prod->menus.hUtilMenu, L" Utilities");
-    if (hIconUtility == 0) { hIconUtility = LoadAndApplyBitmap (IDB_UTILS,    (UINT_PTR)prod->menus.hUtilMenu, prod->menus.hProductMenu); }
+    if (hIconUtility == nullptr) { hIconUtility = LoadAndApplyBitmap (IDB_UTILS,    (UINT_PTR)prod->menus.hUtilMenu, prod->menus.hProductMenu); }
     else                                           ApplyBitmap (hIconUtility, (UINT_PTR)prod->menus.hUtilMenu, prod->menus.hProductMenu);
   }
 
   if (prod->install_state != 0)
   {
     AppendMenu (prod->menus.hProductMenu, MF_MOUSESELECT | MF_POPUP, (UINT_PTR)prod->menus.hFileMenu, L" Browse Files");
-    if (hIconFolder == 0) { hIconFolder = LoadAndApplyBitmap (IDB_FOLDER,  (UINT_PTR)prod->menus.hFileMenu, prod->menus.hProductMenu); }
+    if (hIconFolder == nullptr) { hIconFolder = LoadAndApplyBitmap (IDB_FOLDER,  (UINT_PTR)prod->menus.hFileMenu, prod->menus.hProductMenu); }
     else                                         ApplyBitmap (hIconFolder, (UINT_PTR)prod->menus.hFileMenu, prod->menus.hProductMenu);
   }
 
@@ -350,13 +350,13 @@ SKIM_Tray_UpdateProduct (sk_product_t* prod)
 void
 SKIM_Tray_Init (HWND hWndDlg)
 {
-  if (hTrayMenu != 0)
+  if (hTrayMenu != nullptr)
   {
     DestroyMenu (hTrayMenu);
-    hTrayMenu = 0;
+    hTrayMenu = nullptr;
   }
 
-  if (hTrayMenu == 0)
+  if (hTrayMenu == nullptr)
   {
     hIconSKIM_Tray         = LoadIcon  (g_hInstance, MAKEINTRESOURCE (IDI_TRAY));
     hTrayMenu              = CreatePopupMenu ();

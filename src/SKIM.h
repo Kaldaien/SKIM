@@ -66,6 +66,23 @@ enum {
   SKIM_RESTART_INJECTION       = WM_USER + 0x125
 };
 
+constexpr uint8_t
+__stdcall
+SKIM_GetBitness (void)
+{
+#ifdef _WIN64
+  return 64;
+#else
+  return 32;
+#endif
+}
+
+#define SKIM_RunOnce(x)    { static bool first = true; if (first) { (x); first = false; } }
+
+#define SKIM_RunIf32Bit(x)         { SKIM_GetBitness () == 32  ? (x) :  0; }
+#define SKIM_RunIf64Bit(x)         { SKIM_GetBitness () == 64  ? (x) :  0; }
+#define SKIM_RunLHIfBitness(b,l,r)   SKIM_GetBitness () == (b) ? (l) : (r)
+
 //
 // PRIVATE
 //
