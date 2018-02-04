@@ -4,7 +4,7 @@
 #define SKIM_MAJOR 0
 #define SKIM_MINOR 7
 #define SKIM_BUILD 5
-#define SKIM_REV   12
+#define SKIM_REV   14
 
 
 

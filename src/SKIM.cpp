@@ -35,9 +35,60 @@ unsigned int
 __stdcall
 SKIM_FeatureUnsupportedMessage (LPVOID user);
 
-sk_product_t products [] =
 
+enum {
+  SKIM_APPID_TALES_OF_ZESTIRIA      = 351970,
+  SKIM_APPID_FINAL_FANTASY_X_X2     = 359870,
+  SKIM_APPID_TALES_OF_SYMPHONIA     = 372360,
+  SKIM_APPID_DARKSOULS3             = 374320,
+  SKIM_APPID_FALLOUT4               = 377160,
+  SKIM_APPID_DISGAEA_PC             = 405900,
+  SKIM_APPID_TALES_OF_BERSERIA      = 429660,
+  SKIM_APPID_NIER_AUTOMATA          = 524220,
+  SKIM_APPID_DOTHACK_GU             = 525480,
+  SKIM_APPID_TALES_OF_BERSERIA_DEMO = 550350
+};
+
+#define SKIM_ProductDecl_32Bit(PrimaryDLL,PlugInDLL,PlugInName,GameName,\
+ModName,ConfigTool,Repository,DonateID,AppID,Description)               \
+  { (PrimaryDLL), (PlugInDLL), (PlugInName),                            \
+    (GameName), (ModName),  (ConfigTool), (Repository),                 \
+    (DonateID), (AppID), SK_32_BIT, false, (Description), 0             \
+  }
+
+#ifndef _WIN64
+#define SKIM_ProductDecl_64Bit(PrimaryDLL,PlugInDLL,PlugInName,GameName,\
+ModName,ConfigTool,Repository,DonateID,AppID,Description)               \
+  { (PrimaryDLL), (PlugInDLL), (PlugInName),                            \
+    L"", L"", L"", L"",                                                 \
+    (DonateID), (AppID), SK_64_BIT, false, (Description), 0             \
+  }
+#else
+#define SKIM_ProductDecl_64Bit(PrimaryDLL,PlugInDLL,PlugInName,GameName,\
+ModName,ConfigTool,Repository,DonateID,AppID,Description)               \
+  { (PrimaryDLL), (PlugInDLL), (PlugInName),                            \
+    (GameName), (ModName),  (ConfigTool), (Repository),                 \
+    (DonateID), (AppID), SK_64_BIT, false, (Description), 0             \
+  }
+#endif
+
+#define SKIM_ProductDecl_AllBits(PrimaryDLL,PlugInDLL,PlugInName,GameName,\
+ModName,ConfigTool,Repository,DonateID,AppID,Description)                 \
+  { (PrimaryDLL), (PlugInDLL), (PlugInName),                              \
+    (GameName), (ModName),  (ConfigTool), (Repository),                   \
+    (DonateID), (AppID), SK_BOTH_BIT, false, (Description), 0             \
+  }
+
+#ifdef _WIN64
+#define SKIM_TransientApplicationDecl SKIM_ProductDecl_AllBits
+#else
+#define SKIM_TransientApplicationDecl SKIM_ProductDecl_32Bit
+#endif
+
+sk_product_t products [] =
 {
+  // Special K (Global Injector)
+  //
   {
 #ifndef _WIN64
     L"SpecialK32.dll",
@@ -66,117 +117,102 @@ sk_product_t products [] =
     0
   },
 
-  {
-    L"dinput8.dll",
-    L"d3d11.dll", L"ReShade", // DLL ProductName
-#ifdef _WIN64
-    L".hack//G.U. Last Recode",
-    L".hack//G.P.U.",
-    L"",
-    L"dGPU",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"8A7FSUFJ6KB2U",
-    525480,
-    SK_64_BIT,
-    false,
-    L"Fixes texture aliasing and streaming performance, adds support for texture mods, "
-    L"fixes overexposed bloom / screen flares.",
-    0
-  },
 
-  {
-    L"dinput8.dll",
-    L"ReShade64.dll", L"ReShade", // DLL ProductName
-#ifdef _WIN64
-    L"NieR: Automata™",
-    L"\"FAR\" (Fix Automata Res.)",
-    L"",
-    L"FAR/dinput8",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"H6SDVFMHZVUR6",
-    524220,
-    SK_64_BIT,
-    false,
-    L"Fixes NieR: Automata™'s wonky resolution problems, Global Illumination "
-    L"performance, post-processing image quality, FMV stuttering, resource load "
-    L"hitches, mouse cursor problems, adds > 60 FPS mode and HUD free screenshots.",
-    0
-  },
+  // .hack//G.P.U.
+  //
+  SKIM_ProductDecl_64Bit ( L"dinput8.dll",
 
-  {
-    L"d3d9.dll",
-    L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
-#ifdef _WIN64
-    L"Tales of Berseria",
-    L"Tales of Berseria \"Fix\"",
-    L"",
-    L"TBF",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"ALPEVA3UX74LL",
-    429660,
-    SK_64_BIT,
-    false,
-    L"Adds texture mod support, custom button icons, improves "
-    L"Namco's framerate limiter, enhances shadow quality, "
-    L"adds anti-aliasing and input remapping support.",
-    0
-  },
+                           L"d3d11.dll",               L"ReShade",
+                           L".hack//G.U. Last Recode", L".hack//G.P.U",
 
-  {
-    L"d3d9.dll",
-    L"tbfix.dll", L"Tales of Berseria \"Fix\"", // DLL ProductName
-#ifdef _WIN64
-    L"Tales of Berseria (Demo)",
-    L"Tales of Berseria (Demo) \"Fix\"",
-    L"",
-    L"TBF",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"ALPEVA3UX74LL",
-    550350,
-    SK_64_BIT,
-    false,
-    L"Adds texture mod support, custom button icons, improves "
-    L"Namco's framerate limiter, enhances shadow quality, "
-    L"adds anti-aliasing and input remapping support.",
-    0
-  },
+                           L"",
 
-  {
-    L"d3d9.dll",
-    L"tzfix.dll", L"Tales of Zestiria \"Fix\"", // DLL ProductName
-    L"Tales of Zestiria",
-    L"Tales of Zestiria \"Fix\"",
-    L"tzt.exe",
-    L"TZF",
-    L"X3AAFX8LJWNTU",
-    351970,
-    SK_32_BIT,
-    false,
+                           L"dGPU", L"8A7FSUFJ6KB2U",
+
+                           SKIM_APPID_DOTHACK_GU,
+
+    L"Fixes texture aliasing and streaming performance, adds support for"
+    L" texture mods, fixes overexposed bloom / screen flares." ),
+
+
+
+  // FAR
+  //
+  SKIM_ProductDecl_64Bit ( L"dinput8.dll",
+
+                           L"ReShade64.dll",    L"ReShade",
+                           L"NieR: Automata™", LR"("FAR" (Fix Automata Res.))",
+
+                           L"",
+
+                           L"FAR/dinput8", L"H6SDVFMHZVUR6",
+
+                           SKIM_APPID_NIER_AUTOMATA,
+
+    L"Fixes NieR: Automata™'s wonky resolution problems, Global Illumination"
+    L" performance, post-processing image quality, FMV stuttering, resource"
+    L" load hitches, mouse cursor problems, adds > 60 FPS mode and HUD free"
+    L" screenshots." ),
+
+
+
+  // Tales of Berseria "Fix"
+  //
+  SKIM_ProductDecl_64Bit ( L"d3d9.dll",
+
+                           L"tbfix.dll",         LR"(Tales of Berseria "Fix")",
+                           L"Tales of Berseria", LR"(Tales of Berseria "Fix")",
+
+                           L"",
+
+                           L"TBF", L"ALPEVA3UX74LL",
+
+                           SKIM_APPID_TALES_OF_BERSERIA,
+
+    L"Adds texture mod support, custom button icons, improves"
+    L" Namco's framerate limiter, enhances shadow quality,"
+    L" adds anti-aliasing and input remapping support." ),
+
+  // Tales of Berseria "Fix"
+  //                          ( For Demo Version )
+  SKIM_ProductDecl_64Bit ( L"d3d9.dll",
+
+                           L"tbfix.dll",                LR"(Tales of Berseria "Fix")",
+                           L"Tales of Berseria (Demo)", LR"(Tales of Berseria "Fix")",
+
+                           L"",
+
+                           L"TBF", L"ALPEVA3UX74LL",
+
+                           SKIM_APPID_TALES_OF_BERSERIA_DEMO,
+
+    L"Adds texture mod support, custom button icons, improves"
+    L" Namco's framerate limiter, enhances shadow quality,"
+    L" adds anti-aliasing and input remapping support." ),
+
+
+
+  // Tales of Zestiria "Fix"
+  //
+  SKIM_ProductDecl_32Bit ( L"d3d9.dll",
+
+                           L"tzfix.dll",         LR"(Tales of Zestiria "Fix")",
+                           L"Tales of Zestiria", LR"(Tales of Zestiria "Fix")",
+
+                           L"tzt.exe",
+
+                           L"TZF", L"X3AAFX8LJWNTU",
+
+                           SKIM_APPID_TALES_OF_ZESTIRIA,
+
     L"Adds 60 FPS support, enhances shadow quality, fixes texture aliasing,"
-    L" adds aspect ratio correction and fixes multi-channel / high sample-rate audio stability.",
-    0
-  },
+    L" adds aspect ratio correction and fixes multi-channel / high"
+    L" sample-rate audio stability." ),
 
+
+
+  // Tales of Symphonia "Fix"
+  //
   {
     L"d3d9.dll",
     L"tsfix.dll", L"Tales of Symphonia \"Fix\"", // DLL ProductName
@@ -185,7 +221,7 @@ sk_product_t products [] =
     L"",
     L"TSF",
     L"WNZ6CYRYN3NVJ",
-    372360,
+    SKIM_APPID_TALES_OF_SYMPHONIA,
     SK_32_BIT,
     true,
     L"Adds MSAA, fixes Namco's framerate limiter, supports 4K textures, "
@@ -193,93 +229,79 @@ sk_product_t products [] =
     0
   },
 
-  {
-    L"dxgi.dll",
-    L"", L"",
-#ifdef _WIN64
-    L"Fallout 4",
-    L"Fallout 4 \"Works\"",
-    L"",
-    L"FO4W",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"", // N/A
-    377160,
-    SK_64_BIT,
-#ifdef _WIN64
-    false,
+
+
+  // Fallout 4 "Works"
+  //
+  SKIM_ProductDecl_64Bit ( L"dxgi.dll",
+
+                           L"",           L"",
+                           L"Fallout 4", LR"(Fallout 4 "Works")",
+
+                           L"",
+
+                           L"FO4W", L"",
+
+                           SKIM_APPID_FALLOUT4,
+
     L"Improves framepacing.\r\n\r\n"
-    L"  (Use the Global Injector; Plug-In is built-in)",
-#else
-    L"",
-#endif
-    0
-  },
+    L"  (Use the Global Injector; Plug-In is built-in)" ),
 
-  {
-    L"OpenGL32.dll",
-    L"PrettyPrinny.dll", L"Pretty Prinny", // DLL ProductName
-    L"Disgaea PC",
-    L"Pretty Prinny",
-    L"",
-    L"PrettyPrinny",
-    L"UYL32Y8H4K5H2",
-    405900,
-    SK_32_BIT,
-    false,
+
+
+  // Pretty Prinny
+  //
+  SKIM_ProductDecl_32Bit ( L"OpenGL32.dll",
+
+                           L"PrettyPrinny.dll", L"Pretty Prinny",
+                           L"Disgaea PC",       L"Pretty Prinny",
+
+                           L"",
+
+                           L"PrettyPrinny", L"UYL32Y8H4K5H2",
+
+                           SKIM_APPID_DISGAEA_PC,
+
     L"Improves framepacing, optimizes post-processing, removes the 720p "
-    L"resolution lock, adds borderless window and MSAA, supports custom "
-    L"button icons.",
-    0
-  },
+    L" resolution lock, adds borderless window and MSAA, supports custom "
+    L" button icons." ),
 
-  {
-    L"dxgi.dll",
-    L"", L"Special K", // DLL ProductName
-#ifdef _WIN64
-    L"Dark Souls III",
-    L"Souls \"Unsqueezed\"",
-    L"ds3t.exe",
-    L"SoulsUnsqueezed",
-#else
-    L"",
-    L"",
-    L"",
-    L"",
-#endif
-    L"L9FJSV8WXMWRU",
-    374320,
-    SK_64_BIT,
-    false,
-#ifdef _WIN64
+
+
+  // Souls "Unsqueezed"
+  //
+  SKIM_ProductDecl_64Bit ( L"dxgi.dll",
+
+                           L"",               L"Special K",
+                           L"Dark Souls III", LR"(Souls "Unsqueezed")",
+
+                           L"ds3t.exe",
+
+                           L"SoulsUnsqueezed", L"L9FJSV8WXMWRU",
+
+                           SKIM_APPID_DARKSOULS3,
+
     L"Adds support for non-16:9 aspect ratios, texture memory optimizations "
-    L"and multi-monitor rendering.\r\n",
-#else
-    L"",
-#endif
-    0
-  },
+    L" and multi-monitor rendering.\r\n" ),
 
-  {
-    L"dxgi.dll",
-    L"UnX.dll", L"Untitled Project X", // DLL ProductName
-    L"Final Fantasy X / X-2 HD Remaster",
-    L"\"Untitled\" Project X",
-    L"UnX_Calibrate.exe",
-    L"UnX",
-    L"6TDLFVRGXLU92",
-    359870,
-    SK_32_BIT,
-    false,
-    L"Adds dual-audio support, texture modding, cutscene skipping in FFX, "
-    L"cursor management, Intel GPU bypass, fullscreen exclusive mode, "
-    L"maps all PC-specific extra features to gamepad.\n",
-    0
-  }
+
+  // "Untitled" Project X
+  //
+  SKIM_ProductDecl_32Bit ( L"dxgi.dll",
+
+                           L"UnX.dll",                L"Untitled Project X",
+                           L"Final Fantasy X / X-2 "
+                           L"HD Remaster",           LR"("Untitled" Project X)",
+
+                           L"UnX_Calibrate.exe",
+
+                           L"UnX", L"6TDLFVRGXLU92",
+
+                           SKIM_APPID_FINAL_FANTASY_X_X2,
+
+    L"Adds dual-audio support, texture modding, cutscene skipping in FFX,"
+    L" cursor management, Intel GPU bypass, fullscreen exclusive mode,"
+    L" maps all PC-specific extra features to gamepad.\n" )
 };
 
 void
@@ -460,7 +482,7 @@ const wchar_t*
 SKIM_FindInstallPath (uint32_t appid)
 {
   // DarkSouls 3's install path has additional baggage ;)
-  bool ds3 = (appid == 374320);
+  bool ds3 = (appid == SKIM_APPID_DARKSOULS3);
 
   wchar_t wszAppend [MAX_PATH + 2] = { };
 
@@ -500,7 +522,7 @@ SKIM_FindInstallPath (uint32_t appid)
 
     if (wszSteamPath != nullptr)
     {
-      wchar_t wszLibraryFolders [MAX_PATH + 2] = { };
+      wchar_t wszLibraryFolders [MAX_PATH * 2 + 1] = { };
 
       lstrcpyW   (wszLibraryFolders, wszSteamPath);
       PathAppend (wszLibraryFolders, L"steamapps\\libraryfolders.vdf");
@@ -516,19 +538,22 @@ SKIM_FindInstallPath (uint32_t appid)
 
       if (hLibFolders != INVALID_HANDLE_VALUE)
       {
-        DWORD  dwSize,
-               dwSizeHigh,
-               dwRead;
+        DWORD  dwSize     = 0,
+               dwSizeHigh = 0,
+               dwRead     = 0;
 
-        dwSize = GetFileSize (hLibFolders, &dwSizeHigh);
+        dwSize =
+          GetFileSize (hLibFolders, &dwSizeHigh);
 
         void* data =
-          new uint8_t [dwSize] { };
+          new uint8_t [dwSize + 1] { };
 
         if (data == nullptr)
         {
           return nullptr;
         }
+
+        std::unique_ptr <uint8_t> _data ((uint8_t *)data);
 
         dwRead = dwSize;
 
@@ -564,9 +589,9 @@ SKIM_FindInstallPath (uint32_t appid)
             }
           }
         }
-
-        delete [] data;
       }
+
+      sprintf ((char *)steam_lib_paths [steam_libs++], "%ws", wszSteamPath);
     }
 
     scanned_libs = true;
@@ -600,9 +625,9 @@ SKIM_FindInstallPath (uint32_t appid)
 
       if (hManifest != INVALID_HANDLE_VALUE)
       {
-        DWORD  dwSize,
-               dwSizeHigh,
-               dwRead;
+        DWORD  dwSize     = 0,
+               dwSizeHigh = 0,
+               dwRead     = 0;
 
         dwSize =
           GetFileSize (hManifest, &dwSizeHigh);
@@ -610,139 +635,56 @@ SKIM_FindInstallPath (uint32_t appid)
         auto* szManifestData =
           new char [dwSize + 1] { };
 
-        if (szManifestData == nullptr)
+        if (! szManifestData)
+          continue;
+
+        std::unique_ptr <char> manifest_data (szManifestData);
+
+        bool bRead =
+          ReadFile ( hManifest,
+                       szManifestData,
+                         dwSize,
+                           &dwRead,
+                             nullptr );
+
+        if (! (bRead && dwRead))
         {
-          return nullptr;
+          continue;
         }
 
-        ReadFile ( hManifest,
-                     szManifestData,
-                       dwSize,
-                         &dwRead,
-                           nullptr );
+        char* szInstallDir =
+          StrStrIA (szManifestData, R"("installdir")");
 
-        if (dwRead)
+        char szGamePath [MAX_PATH * 2] = { };
+
+        if (szInstallDir != nullptr)
         {
-          char* szInstallDir =
-            StrStrIA (szManifestData, R"("installdir")");
+          // Make sure everything is lowercase
+          strncpy (szInstallDir, R"("installdir")", strlen (R"("installdir")"));
 
-          char szGamePath [MAX_PATH * 2] = { };
-
-          if (szInstallDir != nullptr)
-          {
-            // Make sure everything is lowercase
-            strncpy (szInstallDir, R"("installdir")", strlen (R"("installdir")"));
-
-            sscanf ( szInstallDir,
-                       R"("installdir" "%518[^"]")",
-                         szGamePath );
-          }
-
-          wsprintf ( wszGamePath,
-                       L"%hs\\steamapps\\common\\%hs%s",
-                         (char *)steam_lib_paths [i],
-                           szGamePath, wszAppend );
-
-          SKIM_StripTrailingSlashes (wszGamePath);
-          SKIM_FixSlashes           (wszGamePath);
-          PathRemoveBackslashW      (wszGamePath);
-
-          if (SKIM_Util_IsDirectory (wszGamePath))
-          {
-            delete [] szManifestData;
-
-            return wszGamePath;
-          }
-
-          else
-            invalid = true;
+          sscanf ( szInstallDir,
+                     R"("installdir" "%518[^"]")",
+                       szGamePath );
         }
 
-        delete [] szManifestData;
+        wsprintf ( wszGamePath,
+                     L"%hs\\steamapps\\common\\%hs%s",
+                       (char *)steam_lib_paths [i],
+                         szGamePath, wszAppend );
+
+        SKIM_StripTrailingSlashes (wszGamePath);
+        SKIM_FixSlashes           (wszGamePath);
+        PathRemoveBackslashW      (wszGamePath);
+
+        if (SKIM_Util_IsDirectory (wszGamePath))
+        {
+          return wszGamePath;
+        }
+
+        else
+          invalid = true;
       }
     }
-  }
-
-  char szManifest [MAX_PATH + 2] = { };
-
-  sprintf ( szManifest,
-              R"(%ws\steamapps\appmanifest_%d.acf)",
-                wszSteamPath,
-                  appid );
-
-  CHandle hManifest (
-    CreateFileA ( szManifest,
-                  GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE,
-                      nullptr,
-                        OPEN_EXISTING,
-                          GetFileAttributesA (szManifest),
-                            nullptr ) );
-
-  if (hManifest != INVALID_HANDLE_VALUE)
-  {
-    DWORD  dwSize,
-           dwSizeHigh,
-           dwRead;
-
-    dwSize =
-      GetFileSize (hManifest, &dwSizeHigh);
-
-    auto* szManifestData =
-      new char [dwSize + 1] { };
-
-
-    if (szManifestData == nullptr)
-    {
-      return nullptr;
-    }
-
-    ReadFile ( hManifest,
-                 szManifestData,
-                   dwSize,
-                     &dwRead,
-                       nullptr );
-
-    if (! dwRead)
-    {
-      delete [] szManifestData;
-      return nullptr;
-    }
-
-    char* szInstallDir =
-      StrStrIA (szManifestData, R"("installdir")");
-
-    char szGamePath [MAX_PATH * 2] = { };
-
-    if (szInstallDir != nullptr)
-    {
-      // Make sure everything is lowercase
-      strncpy (szInstallDir, R"("installdir")", strlen (R"("installdir")"));
-
-      sscanf ( szInstallDir,
-                 R"("installdir" "%518[^"]")",
-                   szGamePath );
-    }
-
-    wsprintf ( wszGamePath,
-                 L"%ws\\steamapps\\common\\%hs%s",
-                   wszSteamPath,
-                     szGamePath, wszAppend );
-
-    SKIM_StripTrailingSlashes (wszGamePath);
-    SKIM_FixSlashes           (wszGamePath);
-    PathRemoveBackslashW      (wszGamePath);
-
-    if (SKIM_Util_IsDirectory (wszGamePath))
-    {
-      delete [] szManifestData;
-      return wszGamePath;
-    }
-
-    else
-      invalid = true;
-
-    delete [] szManifestData;
   }
 
   if (invalid)
@@ -1151,7 +1093,7 @@ SKIM_MigrateProduct (LPVOID user)//sk_product_t* pProduct)
   auto* product = (sk_product_t *)user;
 
   // Disable installation of FO4W
-  if ( product->uiSteamAppID == 377160 )
+  if ( product->uiSteamAppID == SKIM_APPID_FALLOUT4 )
   {
     CloseHandle (GetCurrentThread ());
     return 0;
@@ -1455,7 +1397,7 @@ SKIM_InstallProduct (LPVOID user)//sk_product_t* pProduct)
   auto* product = (sk_product_t *)user;
 
   // Disable installation of FO4W
-  if ( product->uiSteamAppID == 377160 ) {
+  if ( product->uiSteamAppID == SKIM_APPID_FALLOUT4 ) {
     CloseHandle (GetCurrentThread ());
     return 0;
   }
@@ -1834,7 +1776,7 @@ SKIM_UpdateProduct (LPVOID user)
   static int tries = 0;
 
   // Disable installation of FO4W
-  if ( product->uiSteamAppID == 377160 ) {
+  if ( product->uiSteamAppID == SKIM_APPID_FALLOUT4 ) {
     CloseHandle (GetCurrentThread ());
     return 0;
   }
@@ -2329,11 +2271,11 @@ SKIM_OnProductSelect (void)
     Button_Enable (hWndUninstall, 1);
 
     // Tales of Symphonia (has DLC)
-    if (products [sel].uiSteamAppID == 372360)
+    if (products [sel].uiSteamAppID == SKIM_APPID_TALES_OF_SYMPHONIA)
       Button_Enable (hWndManage, 1);
-    else if (products [sel].uiSteamAppID == 374320)
+    else if (products [sel].uiSteamAppID == SKIM_APPID_DARKSOULS3)
       Button_Enable (hWndManage, 1);
-    else if (products [sel].uiSteamAppID == 351970)
+    else if (products [sel].uiSteamAppID == SKIM_APPID_TALES_OF_ZESTIRIA)
       Button_Enable (hWndManage, 1);
     else
       Button_Enable (hWndManage, 0);
